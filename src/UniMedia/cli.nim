@@ -362,6 +362,20 @@ proc runCli*(rawArgs: seq[string]): int =
       echo "duration\t", info.durationSeconds, "s"
     return 0
 
+  # Checked before the library, because a mistyped command is wrong whatever
+  # library it names, and refusing it for the library instead sends the reader
+  # looking for the wrong mistake.
+  if findGroup(command) < 0:
+    stdout.write overview(UniMediaVersion)
+    stdout.flushFile()
+    let alternatives = spellings(command)
+    if alternatives.len > 0:
+      stderr.writeLine "om: " & command & " is an action, not a command: " &
+        "did you mean `om " & alternatives.join("`, `om ") & "`?"
+    else:
+      stderr.writeLine "om: no such command: " & command
+    return 2
+
   # A group named with nothing after it is a question, not an operation, and a
   # reader asking what `dedup` is has not chosen a library yet. Answer it
   # before demanding one, then still say what running it would need. Exit 2
@@ -1578,5 +1592,8 @@ proc runCli*(rawArgs: seq[string]): int =
           if report.failed > 0: return 3
     else: raise newException(ValueError, "unknown dedup action: " & action)
   else:
+    # Unreachable: the guard before the library check rejects anything the
+    # help table does not name, and it names exactly these arms. The branch
+    # exists because a `case` over a string needs one.
     raise newException(ValueError, "unknown command: " & command)
   0
