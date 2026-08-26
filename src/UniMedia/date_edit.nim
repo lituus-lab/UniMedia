@@ -16,6 +16,7 @@
 import std/[options, os, sets, strutils, times]
 import db_connector/db_sqlite
 import UniImage/exif/edit as imageEdit
+from UniImage/exif import writeExifDateTimeOriginal
 import UniMovie/edit as movieEdit
 import UniMedia/[types, store, curation, hashing]
 from UniMedia/organize import newBatchId
@@ -27,7 +28,13 @@ const ExifDate = "yyyy:MM:dd HH:mm:ss"
   ## Exif spells a date with colons in the date part. Writing the canonical form
   ## instead produces a field every reader rejects.
 
-const DateWritableImages = ["avif", "heic", "heif", "jpeg", "jpg", "png", "webp"]
+const DateWritableImages = [
+  # The EXIF block can be rebuilt for these: it does not reference the pixels.
+  "avif", "heic", "heif", "jpeg", "jpg", "png", "webp",
+  # And these are patched where the date already sits, twenty bytes for
+  # twenty. Rebuilding their block would hand back the embedded thumbnail
+  # and drop the picture, which is why the editor refuses them outright.
+  "arw", "cr2", "cr3", "dng", "nef", "orf", "raw", "rw2", "tif", "tiff"]
   ## The Exif carriers the image editor can rebuild. The same set the privacy
   ## strip works on, and for the same reason: it is what the editor does, not
   ## what the format could in principle hold.
@@ -130,8 +137,15 @@ proc writeCorrected(source, dest, newDate: string) =
     # where those disagree shows whichever one the reader happens to prefer.
     exif.setDateTimeOriginal(moment.format(ExifDate))
     if not imageEdit.writeExif(source, exif, dest):
-      raise newException(ValueError,
-        "the metadata editor could not rewrite " & source.extractFilename)
+      # A file whose bulk is image data cannot have its block rebuilt -- a RAW
+      # would come back as its embedded thumbnail -- so the editor refuses it.
+      # The date is patched where it already sits instead: the same twenty
+      # ASCII bytes, so no offset moves and the pixels are never read.
+      copyFile(source, dest)
+      if not writeExifDateTimeOriginal(dest, moment.format(ExifDate)):
+        removeFile(dest)
+        raise newException(ValueError,
+          "the metadata editor could not rewrite " & source.extractFilename)
 
 proc prepareDateWrite(store: Store; entry: DateEditEntry; batchId: string;
                       index: int): PreparedDateWrite =
