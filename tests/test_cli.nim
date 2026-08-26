@@ -34,6 +34,20 @@ test "the overview names every group exactly once":
   for group in Groups:
     check ("\n  " & group.name) in text
 
+test "a bare group answers before it demands a library":
+  # A reader typing `om dedup` is asking what dedup is. Refusing for a
+  # missing --library answers a question they did not ask.
+  # It answers -- exit 2, no raise -- where a missing --library would have
+  # refused. What it prints is the group help the tests above already cover.
+  check runCli(@["dedup"]) == 2
+  check runCli(@["catalog"]) == 2
+
+test "a group that acts as named still refuses without a library":
+  # `om cleanup` is an operation with everything it needs but the library,
+  # so it is the one case the rule above must not swallow.
+  expect ValueError:
+    discard runCli(@["cleanup"])
+
 test "an unknown topic has no help rather than an empty one":
   check findGroup("no-such-command") < 0
   check groupHelp("no-such-command") == ""
