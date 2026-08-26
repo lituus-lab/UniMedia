@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 lituus-lab
+[build-system]
+requires = ["setuptools>=77", "wheel", "Cython>=3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "UniMedia-lituus"
+version = "1.0.0"
+description = "Local-first media catalogue, organizer and duplicate finder backed by the native UniMedia engine"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "lbartoletti" }]
+keywords = ["media", "catalogue", "duplicate-detection", "photo", "video", "exif"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Intended Audience :: End Users/Desktop",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: C",
+  "Topic :: Multimedia :: Graphics",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/lituus-lab/UniMedia"
+Repository = "https://github.com/lituus-lab/UniMedia"
+Issues = "https://github.com/lituus-lab/UniMedia/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=9.1.1"]
+
+[tool.setuptools]
+packages = ["unimedia"]
