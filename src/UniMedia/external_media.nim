@@ -10,7 +10,7 @@
 ##
 ## UniMedia never bundles FFmpeg and never invokes a shell.
 
-import std/[os, osproc, strutils, tempfiles]
+import std/[os, osproc, strutils, tables, tempfiles]
 import UniImage
 import UniMovie
 
@@ -206,9 +206,10 @@ proc probeStill*(path: string): ExternalMediaInfo =
     result.width = still.width
     result.height = still.height
   else:
+    var bytes: seq[byte]
     let image = try:
         let text = readFile(path)
-        var bytes = newSeq[byte](text.len)
+        bytes = newSeq[byte](text.len)
         for index, character in text: bytes[index] = byte(character)
         decodeImage(bytes)
       except CatchableError as error:
@@ -216,6 +217,21 @@ proc probeStill*(path: string): ExternalMediaInfo =
           "cannot read " & path.extractFilename & ": " & error.msg)
     result.width = image.width
     result.height = image.height
+    # A vendor RAW is a TIFF whose first directory holds a preview: decoding
+    # it answers 160x120 for a photograph of 4992x3280. The picture's own size
+    # is stated in the metadata, which is what a caller asking how big this is
+    # wants told.
+    if bytes.len >= 2 and ((bytes[0] == 0x49'u8 and bytes[1] == 0x49'u8) or
+        (bytes[0] == 0x4D'u8 and bytes[1] == 0x4D'u8)):
+      let meta = readMetadataFromBytes(bytes)
+      try:
+        let stated = (parseInt(meta.allTags.getOrDefault("ImageWidth", "")),
+                      parseInt(meta.allTags.getOrDefault("ImageHeight", "")))
+        if stated[0] >= result.width and stated[1] >= result.height:
+          result.width = stated[0]
+          result.height = stated[1]
+      except ValueError:
+        discard
   if result.width <= 0 or result.height <= 0 or result.width > 1_000_000 or
       result.height > 1_000_000:
     raise newException(ExternalMediaError,
