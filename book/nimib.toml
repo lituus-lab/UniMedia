@@ -1,0 +1,11 @@
+[nimib]
+srcDir = "."
+homeDir = "__site"
+
+[nimibook]
+title = "UniMedia — a local-first media library"
+description = "Executable manual: the tool, and building on it"
+author = "lituus-lab"
+
+[nav]
+numbered = true
