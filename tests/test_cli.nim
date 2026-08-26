@@ -42,6 +42,19 @@ test "a bare group answers before it demands a library":
   check runCli(@["dedup"]) == 2
   check runCli(@["catalog"]) == 2
 
+test "a mistyped command is named as the mistake, not the library":
+  # `om find` refused for a missing --library, which sends the reader looking
+  # for the wrong mistake: the word is wrong whatever library it names.
+  check runCli(@["nawak"]) == 2
+  check runCli(@["find"]) == 2
+
+test "an action typed without its group is recognised as one":
+  # The commonest way to get the word wrong is to drop the group, so the
+  # groups that have that action are worth naming back.
+  check spellings("find") == @["dedup find"]
+  check spellings("show") == @["catalog show", "config show"]
+  check spellings("nawak").len == 0
+
 test "a group that acts as named still refuses without a library":
   # `om cleanup` is an operation with everything it needs but the library,
   # so it is the one case the rule above must not swallow.

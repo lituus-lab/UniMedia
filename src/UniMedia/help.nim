@@ -335,6 +335,17 @@ func findGroup*(name: string): int =
   for index, group in Groups:
     if group.name == name: return index
 
+func spellings*(word: string): seq[string] =
+  ## Every `group action` pair whose action is spelled `word`. A word that is
+  ## no command is often an action typed without its group -- `om find` for
+  ## `om dedup find` -- and naming the groups that have one beats a bare
+  ## refusal.
+  for group in Groups:
+    for action in group.actions:
+      let parts = action.synopsis.split(' ')
+      if parts.len >= 2 and parts[0] == group.name and parts[1] == word:
+        result.add group.name & " " & word
+
 proc groupHelp*(name: string): string =
   ## Everything one group can be asked, with a few words on each.
   let index = findGroup(name)
