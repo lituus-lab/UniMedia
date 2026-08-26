@@ -1,0 +1,191 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 lituus-lab
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+# Least privilege by default: guard, test and binaries only build artifacts.
+# The publish job widens its own scope to cut the release.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  guard:
+    name: Tag matches .nimble version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      # A tag disagreeing with the package version ships artifacts whose
+      # embedded version lies. Refuse before anything is built.
+      - run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          declared=$(grep -m1 '^version' UniMedia.nimble | cut -d'"' -f2)
+          echo "tag=$tag nimble=$declared"
+          test "$tag" = "$declared"
+
+  test:
+    name: Nim tests (${{ matrix.os }})
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      - name: Install SQLite and FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install sqlite ffmpeg --no-progress -y
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh testCi
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh testCiRelease
+        working-directory: lituus-lab/UniMedia
+
+  binaries:
+    name: CLI binary (${{ matrix.os }})
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      - name: Install SQLite (Windows)
+        if: runner.os == 'Windows'
+        run: choco install sqlite --no-progress -y
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh build -d:release
+        working-directory: lituus-lab/UniMedia
+      # macOS also ships the optional Apple Vision face detector, which the
+      # engine resolves by name at runtime when it is present.
+      - name: Build the Apple Vision helper (macOS)
+        if: runner.os == 'macOS'
+        run: bash tools/nimble_task.sh appleVision
+        working-directory: lituus-lab/UniMedia
+      - name: Package
+        working-directory: lituus-lab/UniMedia
+        run: |
+          set -euo pipefail
+          dir="UniMedia-${GITHUB_REF_NAME}-${{ matrix.os }}"
+          mkdir -p "$dir"
+          cp bin/om* "$dir/"
+          if [ -f build/unimedia-apple-vision ]; then
+            cp build/unimedia-apple-vision "$dir/"
+          fi
+          cp LICENSE NOTICE README.md "$dir/"
+          tar czf "$dir.tar.gz" "$dir"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: om-${{ matrix.os }}
+          path: lituus-lab/UniMedia/UniMedia-*.tar.gz
+
+  publish:
+    name: Publish GitHub Release
+    needs: [test, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      # softprops/action-gh-release creates the release and uploads the assets.
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - run: ls -R artifacts
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true

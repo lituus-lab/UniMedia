@@ -1,0 +1,475 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 lituus-lab
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only by default; the one job that needs more declares it itself.
+permissions:
+  contents: read
+
+# A newer push makes the previous run's answer irrelevant: cancel it rather
+# than pay for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Every nimble step goes through tools/nimble_task.sh, so the shell has to be
+# the same one on all three runners -- windows-latest defaults to pwsh.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  dco:
+    name: DCO sign-off
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Every commit must carry a Signed-off-by trailer
+        run: |
+          set -euo pipefail
+          range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          bad=0
+          for c in $(git rev-list --no-merges "$range"); do
+            # Parse the trailer block, as tools/hooks/dco_check.sh does: a bare
+            # grep also accepts a Signed-off-by that sits outside it.
+            trailers="$(git log -1 --format='%B' "$c" | git interpret-trailers --parse)"
+            if ! printf '%s\n' "$trailers" | grep -qE '^Signed-off-by: .+ <.+@.+>$'; then
+              echo "Missing Signed-off-by on commit $c"
+              git log -1 --oneline "$c"
+              bad=1
+            fi
+          done
+          exit $bad
+
+  spdx:
+    name: SPDX headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      # Mirrors tools/hooks/spdx_check.sh: every tracked Nim source must carry an
+      # SPDX-License-Identifier header in its first 5 lines.
+      - name: Every Nim source carries an SPDX header
+        run: bash tools/hooks/spdx_check.sh
+
+  test:
+    name: Nim (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      # nim.cfg reaches the engines as ../<name>, so the checkout layout has to
+      # reproduce those relative positions. The engines track main rather than a
+      # pinned commit: a pin dies the moment an engine's history is rewritten,
+      # which is how this workflow last broke.
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniMovie
+          ref: main
+          path: lituus-lab/UniMovie
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      # ffmpeg decodes the one frame a preview needs; what a file is comes from
+      # UniMovie in process. The catalogue stores its index in SQLite, whose
+      # library does not ship on the Windows image.
+      - name: Install SQLite and FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install sqlite ffmpeg --no-progress -y
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh testCi
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh testCiRelease
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh build
+        working-directory: lituus-lab/UniMedia
+      # The example demo is part of the documented surface but no test pulled it
+      # in; build and run it so a broken example fails CI.
+      - run: bash tools/nimble_task.sh example
+        working-directory: lituus-lab/UniMedia
+      - name: Compile the Apple Vision helper
+        if: runner.os == 'macOS'
+        run: bash tools/nimble_task.sh appleVision
+        working-directory: lituus-lab/UniMedia
+
+  lint:
+    name: Lint and dependency graph
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniMovie
+          ref: main
+          path: lituus-lab/UniMovie
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      # Both tools are stdlib-only, but nimble resolves the package's
+      # dependencies before it will run any task from the manifest.
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh lint
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh checkVGraph
+        working-directory: lituus-lab/UniMedia
+
+  abi:
+    name: C ABI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniMovie
+          ref: main
+          path: lituus-lab/UniMovie
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      # Compiles include/UniMedia.h against the static library, so a header that
+      # drifts from c_api.nim fails here rather than in a consumer.
+      - run: bash tools/nimble_task.sh ctest
+        working-directory: lituus-lab/UniMedia
+
+  python:
+    name: Python extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniMovie
+          ref: main
+          path: lituus-lab/UniMovie
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh pyDeps
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh pyTest
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh pyWheel
+        working-directory: lituus-lab/UniMedia
+
+  docs:
+    name: Executable documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniMovie
+          ref: main
+          path: lituus-lab/UniMovie
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh docsDeps
+        working-directory: lituus-lab/UniMedia
+      # nimib runs the book's code against this build: a stale book fails here.
+      - run: bash tools/nimble_task.sh docs
+        working-directory: lituus-lab/UniMedia
+      - name: Upload Docs
+        uses: actions/upload-artifact@v7
+        with:
+          name: docs
+          path: lituus-lab/UniMedia/pages/
+
+  pages:
+    name: Publish Pages
+    needs: docs
+    # Pages serves private repos only on a paid plan, so this switches itself on
+    # once the repository is public.
+    if: ${{ !github.event.repository.private && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      # A job-level block replaces the workflow default outright, so the
+      # artifact read has to be restated alongside the Pages grants.
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: docs
+          path: pages
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: pages
+      - id: deploy
+        uses: actions/deploy-pages@v5
+
+  coverage:
+    name: Coverage
+    # One platform is enough: the report measures which lines the suite reaches,
+    # which the three-OS test job already exercises per platform.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: lituus-lab/UniMedia
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniImage
+          ref: main
+          path: lituus-lab/UniImage
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniMovie
+          ref: main
+          path: lituus-lab/UniMovie
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniPercept
+          ref: main
+          path: lituus-lab/UniPercept
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniCrypto
+          ref: main
+          path: lituus-lab/UniCrypto
+          persist-credentials: false
+      # A path dependency carries none of its own: UniImage's quantizer imports
+      # UniColor, and UniCrypto's BLAKE3 kernels import nimsimd.
+      - uses: actions/checkout@v7
+        with:
+          repository: lituus-lab/UniColor
+          ref: main
+          path: lituus-lab/UniColor
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: lbartoletti/nimsimd
+          ref: master
+          path: libs/nimsimd
+          persist-credentials: false
+      - uses: jiro4989/setup-nim-action@v2
+        with:
+          nim-version: '2.2.10'
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg lcov
+      - run: bash tools/nimble_task.sh install --depsOnly -y
+        working-directory: lituus-lab/UniMedia
+      - run: bash tools/nimble_task.sh coverage
+        working-directory: lituus-lab/UniMedia
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html
+          path: |
+            lituus-lab/UniMedia/coverage/
+            lituus-lab/UniMedia/lcov.info

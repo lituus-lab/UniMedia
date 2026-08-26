@@ -1,0 +1,50 @@
+# build artifacts
+build/
+/bin/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+
+# python binding artifacts (sources tracked; generated and bundled lib not)
+py/unimedia/_core.c
+py/unimedia/*.so
+py/unimedia/libUniMedia.dylib
+py/unimedia/libUniMedia.so
+py/dist/
+py/build/
+py/_nimsrc/
+py/*.egg-info/
+py/**/__pycache__/
+py/.pytest_cache/
+
+# coverage and generated documentation
+coverage/
+lcov.info
+pages/
+book/index.html
+nimdoc.out.css
+
+# Nim caches
+nimcache/
+rnimcache/
+dnimcache/
+
+# Runtime libraries created by examples/tests
+*.db
+*.db-shm
+*.db-wal
+
+# OS and editor
+.DS_Store
+*~
+.*.swp
+*.dSYM
+*.log
+*.core
+book/__site/
