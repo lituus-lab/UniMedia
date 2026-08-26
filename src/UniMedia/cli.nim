@@ -5,6 +5,7 @@ import std/[json, options, os, strutils, sets]
 import UniMedia/[types, config, store, catalog, timeline, privacy, curate, organize,
   curation, smartalbums, dedup, thumbnails, external_media, external_audio,
   trash, removal]
+import UniMedia/help
 import UniMedia/integrity
 import UniMedia/privacy_strip
 import UniMedia/cleanup
@@ -14,118 +15,6 @@ import UniMedia/gpx
 import UniMedia/[reverse_geocode, nominatim_client]
 import UniMedia/[people, vision, sync]
 import UniMedia/face_detect
-
-proc usage*(): string = "om " & UniMediaVersion & """ — local-first media library
-
-Usage:
-  om catalog init DIR --domain photo|video|music|visual [--scheme SCHEME]
-  om --library DIR catalog scan [--no-phash] [--progress]
-  om --library DIR catalog list [--kind KIND] [--limit N] [--offset N] [--json]
-  om --library DIR catalog show ID [--json]
-  om --library DIR catalog search QUERY [--kind KIND] [--limit N] [--offset N] [--json]
-  om --library DIR catalog thumbnail ID [--size 16..4096] [--json]
-  om --library DIR catalog filter [QUERY] [--kind KIND] [--keyword WORD ...]
-       [--min-rating N] [--max-rating N] [--favorite|--no-favorite]
-       [--location TEXT] [--has-gps|--no-gps]
-       [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--limit N] [--offset N] [--json]
-  om --library DIR catalog keywords [--prefix TEXT] [--limit N] [--json]
-  om --library DIR catalog add-virtual NAME [--kind KIND] [--meta KEY=VALUE ...]
-       [--json]
-  om --library DIR catalog meta ID [--meta KEY=VALUE ...]
-  om --library DIR geo places [--prefix TEXT] [--limit N] [--json]
-  om --library DIR geo reverse [ITEM ...] --provider NAME [--language LANG]
-       [--endpoint URL --user-agent TEXT --network] [--overwrite]
-       [--refresh-cache] [--yes] [--progress] [--json]
-  om --library DIR timeline report [--by day|month|year] [--json]
-  om --library DIR privacy audit [--json]
-  om --library DIR privacy strip [ITEM ...] [--yes] [--progress] [--json]
-  om --library DIR integrity audit [--no-hash] [--progress] [--json]
-  om --library DIR config show [--json]
-  om --library DIR config set KEY=VALUE ... [--json]
-       KEY: scheme, filenameDate, birthtimeDate, noDateDir, onConflict, domain
-  om probe FILE [--json]
-  om --library DIR cleanup [--kind KIND ...] [--permanently] [--yes]
-       [--progress] [--json]
-  om --library DIR items remove ITEM... [--permanently] [--yes] [--json]
-  om --library DIR trash list [--json]
-  om --library DIR trash empty [BATCH ...] [--older-than DAYS] [--yes] [--json]
-       KIND: apple-double, os-junk, orphan-sidecar, empty-dir, interrupted
-  om --library DIR dates set DATE ITEM... [--yes] [--progress] [--json]
-  om --library DIR dates shift SECONDS ITEM... [--yes] [--progress] [--json]
-  om --library DIR gpx match FILE [ITEM ...] [--tolerance SECONDS]
-       [--camera-offset MINUTES] [--refresh] [--yes] [--progress] [--json]
-  om --library DIR curate album create|list|show|add|remove|rename|cover|delete ... [--json]
-  om --library DIR curate item show ID [--json]
-  om --library DIR curate item set ID [--title TEXT] [--description TEXT]
-       [--rating 0..5] [--favorite|--no-favorite] [--keywords a,b,c]
-       [--add-keyword WORD ...] [--remove-keyword WORD ...]
-       [--creator NAME ...] [--clear-creator] [--copyright TEXT]
-       [--date YYYY-MM-DD[THH:MM:SS]] [--latitude N --longitude E]
-       [--clear-gps] [--location TEXT] [--json]
-  om --library DIR curate batch set ITEM... [metadata options] [--yes]
-       [--progress] [--json]
-  om --library DIR curate smart create NAME [--all|--any]
-       --rule FIELD:OPERATOR:VALUE [--rule ...]
-  om --library DIR curate smart list|show|rename|delete ... [--json]
-  om --library DIR organize plan|apply SRC [--copy|--move|--hardlink]
-       [--keep-duplicate] [options] [--progress]
-  om --library DIR undo plan|apply <BATCH|--last> [--yes] [--progress]
-  om --library DIR dedup find [--kind exact|visual|audio|all] [--threshold N]
-       [--progress]
-  om --library DIR dedup review [--run ID] [--json]
-  om --library DIR dedup keep GROUP ITEM [--json]
-  om --library DIR dedup remove [--run ID] [--yes] [--json]
-  om --library DIR faces detect ITEM [--backend EXECUTABLE] [--json]
-  om --library DIR faces list [--item ID] [--json]
-  om --library DIR faces clusters [--distance 0..32] [--json]
-  om --library DIR faces name FACE NAME [--json]
-  om --library DIR faces person-create NAME [--json]
-  om --library DIR faces assign FACE PERSON [--json]
-  om --library DIR faces clear ITEM [--yes] [--json]
-  om --library DIR faces import ITEM FILE [--json]
-  om --library DIR vision add ITEM MODEL VECTOR.json [--caption TEXT]
-  om --library DIR vision search MODEL VECTOR.json [--limit N] [--json]
-  om --library DIR vision index ITEM TEXT --endpoint URL --model MODEL [--caption TEXT]
-  om --library DIR vision semantic QUERY --endpoint URL --model MODEL [--limit N]
-  om --library DIR vision label ITEM --endpoint URL --model VISION_MODEL
-  om --library DIR vision annotations [ITEM] [--json]
-  om --library DIR sync plan push|pull REMOTE [--json]
-  om --library DIR sync apply PLAN --yes [--json]
-  om --library DIR sync status [PLAN] [--limit N] [--json]
-  om --library DIR sync manifest [--json]
-  om --library DIR sync diff MANIFEST.json [--json]
-
-Global options, accepted by every command:
-  --library DIR            Library root (required except for catalog init)
-  --json                   One JSON object per output record on stdout
-  --progress               Progress events on stderr as phase/current/total/message
-  --progress-json          Progress events on stderr as one JSON object per line
-  --version                Print the version
-  --help, -h               Print this usage
-
-Exit codes: 0 success, 1 error, 2 usage error, 3 partial failure, 4 cancelled.
-
-Interrupting a run (Ctrl-C, or SIGINT from a parent process) stops it at the next
-cooperative boundary and exits 4. Organize and undo are journaled instead: an
-interrupted batch is reconciled by the next run.
-
-Organize options:
-  --scheme SCHEME          YYYY/MM-DD (month/date), YYYY/MM/DD (month/day),
-                           YYYY/MM, YYYY/YYYY-MM-DD, or flat
-  --filename-date          Enable filename date extraction
-  --no-filename-date       Disable filename date extraction
-  --keep-duplicate         Copy an identical file too, suffixed _1, _2, ...
-                           Off: the same bytes under the same name are one file
-  --birthtime-date         Accept the filesystem creation time as a date
-  --no-birthtime-date      Reject it (default): on a copied library it is the
-                           date of the copy, not of the photograph
-  --no-date-dir NAME       Bucket for files without a reliable date
-  --on-conflict POLICY     suffix or skip
-  --copy                   Copy sources (default)
-  --move --yes             Move sources explicitly
-  --hardlink               Link sources instead of copying (same filesystem
-                           only); the source keeps its own name
-"""
 
 proc takeFlag(args: var seq[string]; name: string): bool =
   let index = args.find(name)
@@ -377,9 +266,19 @@ proc parseId(value, kind: string): int64 =
 
 proc runCli*(rawArgs: seq[string]): int =
   var args = rawArgs
-  if args.len == 0 or "--help" in args or "-h" in args:
-    stdout.write usage()
+  # Asked for by position, not by presence anywhere in the line: `--title
+  # --help` sets a title to "--help", and printing the usage there would throw
+  # away the edit the caller was making. It is a help request only where it
+  # opens the line, or where it follows a command name.
+  if args.len == 0 or args[0] in ["--help", "-h"]:
+    stdout.write overview(UniMediaVersion)
     return 0
+  for index in 1 ..< args.len:
+    if args[index] notin ["--help", "-h"]: continue
+    if findGroup(args[index - 1]) >= 0:
+      stdout.write groupHelp(args[index - 1])
+      return 0
+    break
   if takeFlag(args, "--version"):
     echo "om ", UniMediaVersion
     return 0
@@ -465,7 +364,12 @@ proc runCli*(rawArgs: seq[string]): int =
 
   case command
   of "catalog":
-    if args.len == 0: raise newException(ValueError, "missing catalog action")
+    if args.len == 0:
+      # A group named with nothing after it is a question, so it is
+      # answered rather than refused. Still exit 2: a script that
+      # reached here did not run what it meant to.
+      stdout.write groupHelp("catalog")
+      return 2
     let action = args[0]
     args.delete(0)
     case action
@@ -631,7 +535,12 @@ proc runCli*(rawArgs: seq[string]): int =
       echo itemMeta(store, itemId)
     else: raise newException(ValueError, "unknown catalog action: " & action)
   of "geo":
-    if args.len == 0: raise newException(ValueError, "missing geo action")
+    if args.len == 0:
+      # A group named with nothing after it is a question, so it is
+      # answered rather than refused. Still exit 2: a script that
+      # reached here did not run what it meant to.
+      stdout.write groupHelp("geo")
+      return 2
     let action = args[0]
     args.delete(0)
     case action
@@ -1344,7 +1253,12 @@ proc runCli*(rawArgs: seq[string]): int =
     else:
       raise newException(ValueError, "unknown curate album action: " & action)
   of "faces":
-    if args.len == 0: raise newException(ValueError, "missing faces action")
+    if args.len == 0:
+      # A group named with nothing after it is a question, so it is
+      # answered rather than refused. Still exit 2: a script that
+      # reached here did not run what it meant to.
+      stdout.write groupHelp("faces")
+      return 2
     let action = args[0]
     args.delete(0)
     case action
@@ -1419,7 +1333,12 @@ proc runCli*(rawArgs: seq[string]): int =
       echo $(%*{"face": args[0], "person": args[1]})
     else: raise newException(ValueError, "unknown faces action: " & action)
   of "vision":
-    if args.len == 0: raise newException(ValueError, "missing vision action")
+    if args.len == 0:
+      # A group named with nothing after it is a question, so it is
+      # answered rather than refused. Still exit 2: a script that
+      # reached here did not run what it meant to.
+      stdout.write groupHelp("vision")
+      return 2
     let action = args[0]
     args.delete(0)
     let caption = takeValue(args, "--caption")
@@ -1488,7 +1407,12 @@ proc runCli*(rawArgs: seq[string]): int =
           "updatedAt": annotation.updatedAt})
     else: raise newException(ValueError, "unknown vision action: " & action)
   of "sync":
-    if args.len == 0: raise newException(ValueError, "missing sync action")
+    if args.len == 0:
+      # A group named with nothing after it is a question, so it is
+      # answered rather than refused. Still exit 2: a script that
+      # reached here did not run what it meant to.
+      stdout.write groupHelp("sync")
+      return 2
     let action = args[0]
     args.delete(0)
     let confirmed = takeFlag(args, "--yes")
@@ -1566,7 +1490,12 @@ proc runCli*(rawArgs: seq[string]): int =
       if report.failed > 0: return 3
     else: raise newException(ValueError, "unknown undo action: " & action)
   of "dedup":
-    if args.len == 0: raise newException(ValueError, "missing dedup action")
+    if args.len == 0:
+      # A group named with nothing after it is a question, so it is
+      # answered rather than refused. Still exit 2: a script that
+      # reached here did not run what it meant to.
+      stdout.write groupHelp("dedup")
+      return 2
     let action = args[0]
     args.delete(0)
     case action

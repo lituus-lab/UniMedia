@@ -91,6 +91,10 @@ that speed from a blank page.
 
 ## CLI
 
+`om --help` lists the command groups; `om <group> --help` — `om dedup --help`, `om geo --help` — says what each of that group's actions
+does and which options change it. The examples below are the same commands
+in use.
+
 ```bash
 nimble install --depsOnly -y
 nimble buildOm
