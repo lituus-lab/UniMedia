@@ -264,6 +264,10 @@ proc parseId(value, kind: string): int64 =
   if result <= 0:
     raise newException(ValueError, "invalid " & kind & " id: " & value)
 
+const ActionGroups = ["catalog", "geo", "faces", "vision", "sync", "dedup"]
+  ## Groups that do nothing without an action word, so a bare one is a
+  ## question. The rest either take a positional argument or act as named.
+
 proc runCli*(rawArgs: seq[string]): int =
   var args = rawArgs
   # Asked for by position, not by presence anywhere in the line: `--title
@@ -358,18 +362,25 @@ proc runCli*(rawArgs: seq[string]): int =
       echo "duration\t", info.durationSeconds, "s"
     return 0
 
+  # A group named with nothing after it is a question, not an operation, and a
+  # reader asking what `dedup` is has not chosen a library yet. Answer it
+  # before demanding one, then still say what running it would need. Exit 2
+  # either way: a script that reached here did not run what it meant to.
+  if args.len == 0 and command in ActionGroups:
+    stdout.write groupHelp(command)
+    if libraryRoot.len == 0:
+      # stderr is unbuffered and stdout is not, so without this the one
+      # actionable line lands above the help it belongs under.
+      stdout.flushFile()
+      stderr.writeLine "om: --library is required"
+    return 2
+
   if libraryRoot.len == 0: raise newException(ValueError, "--library is required")
   var store = openLibrary(libraryRoot)
   defer: store.close()
 
   case command
   of "catalog":
-    if args.len == 0:
-      # A group named with nothing after it is a question, so it is
-      # answered rather than refused. Still exit 2: a script that
-      # reached here did not run what it meant to.
-      stdout.write groupHelp("catalog")
-      return 2
     let action = args[0]
     args.delete(0)
     case action
@@ -535,12 +546,6 @@ proc runCli*(rawArgs: seq[string]): int =
       echo itemMeta(store, itemId)
     else: raise newException(ValueError, "unknown catalog action: " & action)
   of "geo":
-    if args.len == 0:
-      # A group named with nothing after it is a question, so it is
-      # answered rather than refused. Still exit 2: a script that
-      # reached here did not run what it meant to.
-      stdout.write groupHelp("geo")
-      return 2
     let action = args[0]
     args.delete(0)
     case action
@@ -1253,12 +1258,6 @@ proc runCli*(rawArgs: seq[string]): int =
     else:
       raise newException(ValueError, "unknown curate album action: " & action)
   of "faces":
-    if args.len == 0:
-      # A group named with nothing after it is a question, so it is
-      # answered rather than refused. Still exit 2: a script that
-      # reached here did not run what it meant to.
-      stdout.write groupHelp("faces")
-      return 2
     let action = args[0]
     args.delete(0)
     case action
@@ -1333,12 +1332,6 @@ proc runCli*(rawArgs: seq[string]): int =
       echo $(%*{"face": args[0], "person": args[1]})
     else: raise newException(ValueError, "unknown faces action: " & action)
   of "vision":
-    if args.len == 0:
-      # A group named with nothing after it is a question, so it is
-      # answered rather than refused. Still exit 2: a script that
-      # reached here did not run what it meant to.
-      stdout.write groupHelp("vision")
-      return 2
     let action = args[0]
     args.delete(0)
     let caption = takeValue(args, "--caption")
@@ -1407,12 +1400,6 @@ proc runCli*(rawArgs: seq[string]): int =
           "updatedAt": annotation.updatedAt})
     else: raise newException(ValueError, "unknown vision action: " & action)
   of "sync":
-    if args.len == 0:
-      # A group named with nothing after it is a question, so it is
-      # answered rather than refused. Still exit 2: a script that
-      # reached here did not run what it meant to.
-      stdout.write groupHelp("sync")
-      return 2
     let action = args[0]
     args.delete(0)
     let confirmed = takeFlag(args, "--yes")
@@ -1490,12 +1477,6 @@ proc runCli*(rawArgs: seq[string]): int =
       if report.failed > 0: return 3
     else: raise newException(ValueError, "unknown undo action: " & action)
   of "dedup":
-    if args.len == 0:
-      # A group named with nothing after it is a question, so it is
-      # answered rather than refused. Still exit 2: a script that
-      # reached here did not run what it meant to.
-      stdout.write groupHelp("dedup")
-      return 2
     let action = args[0]
     args.delete(0)
     case action
