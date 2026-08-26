@@ -3,15 +3,40 @@
 
 import std/[json, options, unittest, os, strutils]
 import UniMedia/cli
+import UniMedia/help
 import UniMedia/[types, store, curation]
 import UniMedia/[reverse_geocode, nominatim_client]
 import UniMedia/sync
 import UniImage/[core, formats]
 import UniImage/exif/edit
 
-test "usage distinguishes the two similar date layouts":
-  check "YYYY/MM-DD (month/date)" in usage()
-  check "YYYY/MM/DD (month/day)" in usage()
+test "the help distinguishes the two similar date layouts":
+  # One files a month's pictures in a folder per day, the other in a folder
+  # per month with the day in the name. A reader choosing between them has to
+  # be able to tell which is which.
+  let text = groupHelp("catalog")
+  check "YYYY/MM-DD (month/date)" in text
+  check "YYYY/MM/DD (month/day)" in text
+
+test "every group answers for itself":
+  # A group in the table with no help would be a command a reader cannot ask
+  # about, which is the gap this table exists to close.
+  for group in Groups:
+    let text = groupHelp(group.name)
+    check text.len > 0
+    check group.summary in text
+    for action in group.actions:
+      check action.synopsis in text
+      check action.summary.split(" ")[0] in text
+
+test "the overview names every group exactly once":
+  let text = overview("1.0.0")
+  for group in Groups:
+    check ("\n  " & group.name) in text
+
+test "an unknown topic has no help rather than an empty one":
+  check findGroup("no-such-command") < 0
+  check groupHelp("no-such-command") == ""
 
 proc fresh(name: string): string =
   result = getTempDir() / name
