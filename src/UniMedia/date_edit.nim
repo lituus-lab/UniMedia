@@ -327,7 +327,10 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
       progress(ProgressEvent(phase: "date-edit", current: index + 1,
         total: plan.entries.len, message: entry.relPath))
 
-  if writtenFor.len > 0 and result.failures.len == 0:
+  # Whenever anything was rewritten, not only when everything was: the files
+  # that did succeed changed on disk, and leaving them unscanned keeps a stale
+  # size and timestamp in the catalogue for exactly the runs that went wrong.
+  if writtenFor.len > 0:
     # Incremental: only the files just rewritten differ in size or timestamp, so
     # this re-reads those and stats the rest. Perceptual hashes are left for a
     # later scan — a metadata edit does not change what a picture looks like.
