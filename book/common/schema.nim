@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 lituus-lab
 import std/[os, strutils, algorithm]
 import db_connector/db_sqlite
 import nimib, nimibook

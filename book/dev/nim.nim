@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 lituus-lab
 import std/[os, strutils]
 import nimib, nimibook
 # The modules a caller actually needs, not the umbrella. Importing narrowly is
