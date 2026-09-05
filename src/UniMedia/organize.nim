@@ -475,7 +475,8 @@ proc applyUndo*(store: var Store; requested: string;
           # id. Otherwise the entry would list a photograph that is no longer
           # there, which the full rescan used to clean up on the library's
           # time rather than the batch's.
-          let restoredHere = store.db.getValue(sql"""
+          let restoredHere = store.db.getValue(
+            sql"""
             SELECT count(*) FROM batch_ops
             WHERE batch_id=? AND kind=? AND source_path=?""",
             result.batchId, $okMove,
