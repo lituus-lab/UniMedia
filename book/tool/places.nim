@@ -65,8 +65,18 @@ folding them together would send you to change a setting that cannot help.
 ## Names for coordinates
 
 Coordinates say where; they do not say *Sydney*. `geo reverse` asks a geocoder,
-by default [Nominatim](https://nominatim.openstreetmap.org), OpenStreetMap's
-own. It is free and needs no account, and asks two things in return:
+and nothing is implicit about which one: it names no default endpoint and makes
+no request unless you ask for one. Without `--network` it answers from the
+cache alone, and `--network` is refused unless `--endpoint` and `--user-agent`
+come with it.
+
+Coordinates are among the most revealing things a photograph carries, so the
+endpoint is worth choosing rather than accepting: one you run yourself, or one
+you trust with the positions of your own pictures.
+
+[Nominatim](https://nominatim.openstreetmap.org) is OpenStreetMap's own and the
+obvious public choice. It is free and needs no account, and asks two things in
+return:
 
 - **A user agent naming you.** The command refuses without one. That is
   Nominatim's usage policy, not a formality — anonymous bulk traffic is blocked.
