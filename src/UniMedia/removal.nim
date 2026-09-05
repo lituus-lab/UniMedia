@@ -201,14 +201,22 @@ proc linkDuplicates*(store: var Store;
   if pairs.len == 0:
     raise newException(ValueError, "no duplicate to link")
   requireHardlinkSupport(store.library.root)
-  var seen = initHashSet[int64]()
+  # Every item this call replaces, known before any pair is judged: a keeper
+  # that is itself being replaced would leave a link pointing at a link, and
+  # the incremental set could not see a chain `A -> B, B -> C` coming, nor a
+  # cycle `A -> B, B -> A`.
+  var replaced = initHashSet[int64]()
+  for pair in pairs:
+    if pair.itemId in replaced:
+      raise newException(ValueError, "an item is named twice")
+    replaced.incl pair.itemId
   var keeperPath: seq[string]
   for pair in pairs:
     if pair.itemId == pair.keeperId:
       raise newException(ValueError, "an item cannot be linked to itself")
-    if pair.itemId in seen:
-      raise newException(ValueError, "an item is named twice")
-    seen.incl pair.itemId
+    if pair.keeperId in replaced:
+      raise newException(ValueError,
+        "a keeper is itself being replaced: " & $pair.keeperId)
     let duplicate = store.absoluteItemPath(store.getItem(pair.itemId).relPath)
     let keeper = store.absoluteItemPath(store.getItem(pair.keeperId).relPath)
     if not fileExists(duplicate):

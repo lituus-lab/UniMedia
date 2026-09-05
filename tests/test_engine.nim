@@ -1911,6 +1911,10 @@ suite "a duplicate can become a link instead of going to the trash":
     expect ValueError: discard linkDuplicates(store, @[(b, a), (b, a)])
     # c differs from a, so the whole request is refused rather than half done.
     expect ValueError: discard linkDuplicates(store, @[(b, a), (c, a)])
+    # A keeper that is itself being replaced, as a chain and as a cycle: both
+    # would leave a link pointing at a link.
+    expect ValueError: discard linkDuplicates(store, @[(a, b), (b, c)])
+    expect ValueError: discard linkDuplicates(store, @[(a, b), (b, a)])
     check store.listItems().len == 3
     store.close()
     removeDir(root)

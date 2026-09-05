@@ -54,6 +54,14 @@ task docsDeps, "Install the docs toolchain (nimib + nimibook)":
   withDir "build":
     exec "nimble install -y nimib"
     exec "nimble install -y https://github.com/pietroppeter/nimibook@#v0.4.0"
+  # `nimble install` exits 0 even when it installed nothing, so this task's own
+  # success marker would otherwise promise a toolchain that is not there and
+  # the book would fail later with something unrelated. The compiler answers
+  # truthfully: it either resolves both modules or it does not.
+  writeFile("build/docsdeps_probe.nim", "import nimib, nimibook\n")
+  exec "nim c --hints:off --verbosity:0 -o:build/docsdeps_probe" &
+       " build/docsdeps_probe.nim"
+  rmFile "build/docsdeps_probe.nim"
 
 task book, "Build the multipage nimib book (needs nimib + nimibook)":
   # The tool chapters drive the real binary, so it has to exist: without it

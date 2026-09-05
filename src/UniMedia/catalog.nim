@@ -173,10 +173,14 @@ proc isInternal*(root, path: string): bool =
   ## anything under a dotted directory such as `.om-cache` or `.om-trash`.
   ## `path` must be under `root`; anything else relativizes to `..`, which
   ## every dotted-part check would answer yes to.
+  # Split on the catalogue's own separator, not the platform's: `rel` is
+  # already normalised, so `DirSep` matched nothing on Windows and every dotted
+  # directory went unrecognised there.
   let rel = relCatalogPath(path, root)
-  let first = rel.splitPath.head
+  let parts = rel.split(CatalogSep)
+  let first = if parts.len > 1: parts[0] else: ""
   let name = path.extractFilename
-  for part in rel.split(DirSep):
+  for part in parts:
     if part.startsWith('.') and not part.startsWith(".om-tmp-"):
       return true
   name == ConfigName or name.startsWith(DatabaseName) or

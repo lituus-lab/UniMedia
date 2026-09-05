@@ -1,16 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 lituus-lab
 
-import std/[options, os, strutils, times]
+import std/[options, os, times]
+when defined(windows): import std/strutils
 import contracts
+
+const CatalogSep* = '/'
+  ## The separator every stored path uses, whatever the platform produced.
 
 proc catalogPath*(path: string): string =
   ## A path as the catalogue stores it: `/` on every platform.
   ##
-  ## The rows are compared, joined and printed as text, so a library folder has
-  ## to read the same wherever it is opened. Windows accepts `/` everywhere it
-  ## accepts `\\`, so the stored form is usable as a path unchanged.
-  path.replace('\\', '/')
+  ## Rewritten only where a backslash is a separator. On POSIX it is a legal
+  ## character in a filename, so `a\\b.jpg` is one name there and rewriting it
+  ## would file the picture under a directory that does not exist.
+  when defined(windows): path.replace('\\', CatalogSep) else: path
 
 proc relCatalogPath*(path, root: string): string =
   ## `path` relative to `root`, in the catalogue's own separator.

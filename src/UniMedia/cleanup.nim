@@ -266,7 +266,7 @@ proc applyCleanup*(store: var Store; plan: CleanupPlan;
     # that undo would reject reads as a way back that does not exist.
     for index, entry in files:
       try:
-        removeFile(root / entry.relPath)
+        removeFile(store.absoluteItemPath(entry.relPath))
         inc result.applied
       except CatchableError:
         inc result.failed
@@ -275,7 +275,7 @@ proc applyCleanup*(store: var Store; plan: CleanupPlan;
           total: files.len, message: entry.relPath))
     for entry in directories:
       try:
-        removeDir(root / entry.relPath, checkDir = true)
+        removeDir(store.absoluteItemPath(entry.relPath), checkDir = true)
         inc result.applied
       except CatchableError:
         inc result.failed
@@ -291,7 +291,7 @@ proc applyCleanup*(store: var Store; plan: CleanupPlan;
         VALUES(?,?,?,'cleanup',?)""", result.batchId, isoNow(), root,
         $bsApplying)
       for index, entry in files:
-        let source = root / entry.relPath
+        let source = store.absoluteItemPath(entry.relPath)
         store.db.exec(sql"""
           INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
             content_hash,status) VALUES(?,?,?,?,?,?,?)""", result.batchId,
@@ -304,7 +304,7 @@ proc applyCleanup*(store: var Store; plan: CleanupPlan;
       raise
 
   for index, entry in files:
-    let source = root / entry.relPath
+    let source = store.absoluteItemPath(entry.relPath)
     let destination = root / TrashDirName / result.batchId / "cleanup" /
       entry.relPath
     try:
@@ -325,7 +325,7 @@ proc applyCleanup*(store: var Store; plan: CleanupPlan;
 
   for entry in directories:
     try:
-      removeDir(root / entry.relPath, checkDir = true)
+      removeDir(store.absoluteItemPath(entry.relPath), checkDir = true)
       inc result.applied
     except CatchableError:
       inc result.failed

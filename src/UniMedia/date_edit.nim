@@ -20,7 +20,7 @@ from UniImage/exif import writeExifDateTimeOriginal
 import UniMovie/edit as movieEdit
 import UniMedia/[types, store, curation, hashing]
 from UniMedia/organize import newBatchId
-from UniMedia/catalog import scanLibrary
+from UniMedia/catalog import scanLibrary, reindexPaths
 
 const CanonicalDate = "yyyy-MM-dd HH:mm:ss"
 
@@ -250,6 +250,7 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
       raise
 
   var writtenFor = initHashSet[int64]()
+  var writtenPaths: seq[string]
   var sequence = 0
   for operation in prepared:
     # Each operation owns a fixed block of rows -- one per sidecar, one for the
@@ -276,6 +277,7 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
       transfer(operation.media, operation.mediaTrash)
       transfer(operation.temp, operation.media)
       writtenFor.incl operation.itemId
+      writtenPaths.add operation.media
       inc result.written
     except CatchableError as error:
       store.db.exec(sql"""
@@ -327,11 +329,12 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
       progress(ProgressEvent(phase: "date-edit", current: index + 1,
         total: plan.entries.len, message: entry.relPath))
 
-  # Whenever anything was rewritten, not only when everything was: the files
-  # that did succeed changed on disk, and leaving them unscanned keeps a stale
-  # size and timestamp in the catalogue for exactly the runs that went wrong.
-  if writtenFor.len > 0:
-    # Incremental: only the files just rewritten differ in size or timestamp, so
-    # this re-reads those and stats the rest. Perceptual hashes are left for a
-    # later scan — a metadata edit does not change what a picture looks like.
-    discard scanLibrary(store, skipPhash = true)
+  # The files that were rewritten, and only those. Whenever anything was
+  # rewritten, not only when everything was: leaving the successes unscanned
+  # keeps a stale size and timestamp for exactly the runs that went wrong. But
+  # a whole-library scan would also reconcile the items whose rewrite failed,
+  # whose rows an undo still needs as they are -- so the named paths are
+  # re-read and nothing else. Perceptual hashes are left for a later scan: a
+  # metadata edit does not change what a picture looks like.
+  if writtenPaths.len > 0:
+    discard reindexPaths(store, writtenPaths, skipPhash = true)
