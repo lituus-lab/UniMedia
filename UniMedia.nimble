@@ -98,6 +98,14 @@ task appleVision, "Build the optional macOS Apple Vision face detector":
   else:
     echo "Apple Vision is available only on macOS"
 
+task cli, "The om command-line binary":
+  # Not `nimble build`: that compiles from a copied tree where nimble 0.22
+  # hands the compiler `<pkg>/src` for each dependency while installing them
+  # flattened, so `UniImage` is not found there. Compiling in place with an
+  # explicit path produces the same binary and resolves what the code imports.
+  mkDir "bin"
+  exec "nim c -d:release --path:src -o:bin/om src/om.nim"
+
 task clibStatic, "C static library":
   mkDir "build"
   exec "nim c --app:staticlib -d:staticNoAutoInit --noMain --mm:arc -d:release --path:src " &
