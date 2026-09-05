@@ -673,7 +673,7 @@ proc checkedPathUnder*(root, path: string): string =
   result = normalizedPath(absolutePath(path))
   if result != safeRoot and not result.startsWith(safeRoot & DirSep):
     raise newException(ValueError, "path escapes its allowed root: " & path)
-  let relPath = relativePath(result, safeRoot)
+  let relPath = relCatalogPath(result, safeRoot)
   var cursor = safeRoot
   for part in relPath.split({DirSep, AltSep}):
     if part.len == 0 or part == ".": continue

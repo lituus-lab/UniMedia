@@ -199,7 +199,7 @@ proc planCleanup*(store: Store;
   # reading a directory from inside the walk of that same directory, which
   # loses the outer walk's place.
   for path in walkDirRec(root, yieldFilter = {pcFile, pcLinkToFile, pcDir}):
-    let rel = relativePath(path, root)
+    let rel = relCatalogPath(path, root)
     if rel.startsWith(TrashDirName): continue
     let name = path.extractFilename
     if name == ConfigName or name.startsWith(DatabaseName) or
@@ -216,7 +216,7 @@ proc planCleanup*(store: Store;
     if parent notin neighbours: neighbours[parent] = initHashSet[string]()
     neighbours[parent].incl path.extractFilename
   for path in files:
-    result.entries.add classify(path, relativePath(path, root), wanted,
+    result.entries.add classify(path, relCatalogPath(path, root), wanted,
       neighbours.getOrDefault(path.parentDir))
 
   if ckEmptyDir in wanted:
@@ -232,7 +232,7 @@ proc planCleanup*(store: Store;
         break
       if not empty: continue
       going.incl directory
-      result.entries.add CleanupEntry(relPath: relativePath(directory, root),
+      result.entries.add CleanupEntry(relPath: relCatalogPath(directory, root),
         kind: ckEmptyDir, size: 0, removable: true, reason: "holds nothing")
 
 proc applyCleanup*(store: var Store; plan: CleanupPlan;

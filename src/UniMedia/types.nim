@@ -1,8 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 lituus-lab
 
-import std/[options, times]
+import std/[options, os, strutils, times]
 import contracts
+
+proc catalogPath*(path: string): string =
+  ## A path as the catalogue stores it: `/` on every platform.
+  ##
+  ## The rows are compared, joined and printed as text, so a library folder has
+  ## to read the same wherever it is opened. Windows accepts `/` everywhere it
+  ## accepts `\\`, so the stored form is usable as a path unchanged.
+  path.replace('\\', '/')
+
+proc relCatalogPath*(path, root: string): string =
+  ## `path` relative to `root`, in the catalogue's own separator.
+  relativePath(path, root).catalogPath
 
 # Single source of truth for the version: the facade re-exports it and the CLI
 # prints it, so a bump touches one line. tests/test_config.nim checks it against

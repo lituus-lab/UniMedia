@@ -98,14 +98,6 @@ task appleVision, "Build the optional macOS Apple Vision face detector":
   else:
     echo "Apple Vision is available only on macOS"
 
-task cli, "The om command-line binary":
-  # Not `nimble build`: that compiles from a copied tree where nimble 0.22
-  # hands the compiler `<pkg>/src` for each dependency while installing them
-  # flattened, so `UniImage` is not found there. Compiling in place with an
-  # explicit path produces the same binary and resolves what the code imports.
-  mkDir "bin"
-  exec "nim c -d:release --path:src -o:bin/om src/om.nim"
-
 task clibStatic, "C static library":
   mkDir "build"
   exec "nim c --app:staticlib -d:staticNoAutoInit --noMain --mm:arc -d:release --path:src " &
@@ -127,7 +119,10 @@ task ctest, "Compile and run the C ABI test against the header":
   let systemLibs = when defined(macosx):
                      " -lsqlite3 -framework Security -framework ImageIO" &
                      " -framework CoreFoundation -framework CoreGraphics"
-                   else: " -lsqlite3"
+                   # -lm because glibc keeps the maths functions out of libc
+                   # and UniAudio's chroma and AIFF code calls them; macOS has
+                   # them in libSystem, which is why only Linux failed to link.
+                   else: " -lsqlite3 -lm"
   exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/test_abi " &
     "tests/c/test_abi.c build/libUniMedia.a" & systemLibs
   # A fresh library each run: the test asserts exact item counts.
@@ -186,7 +181,15 @@ task coverage, "LCOV + HTML coverage for the engine sources":
        # destructors Nim generates, a compiler artefact with no source-level
        # fix. Every other lcov error still fails the task.
        " --ignore-errors gcov,gcov,mismatch"
-  # Nim can map generated end-of-procedure code one line past the source EOF.
-  exec "genhtml lcov.info --output-directory coverage --legend --quiet" &
-       " --ignore-errors range,range"
+  # Nim can map generated end-of-procedure code one line past the source EOF,
+  # and that one artefact answers to two names: lcov 2.0, the version
+  # ubuntu-latest installs, calls it `unmapped` and rejects `range` as a
+  # category outright, while 2.5 calls it `range` and can filter those lines
+  # away. Ask which one is there rather than assume.
+  let genhtmlRange =
+    if gorgeEx("genhtml --version").output.contains("LCOV version 2.0"):
+      " --ignore-errors unmapped"
+    else: " --filter range --ignore-errors range"
+  exec "genhtml lcov.info" & genhtmlRange &
+       " --output-directory coverage --legend --quiet"
   exec "lcov --summary lcov.info"

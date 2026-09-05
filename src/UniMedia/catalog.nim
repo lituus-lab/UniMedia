@@ -173,7 +173,7 @@ proc isInternal*(root, path: string): bool =
   ## anything under a dotted directory such as `.om-cache` or `.om-trash`.
   ## `path` must be under `root`; anything else relativizes to `..`, which
   ## every dotted-part check would answer yes to.
-  let rel = relativePath(path, root)
+  let rel = relCatalogPath(path, root)
   let first = rel.splitPath.head
   let name = path.extractFilename
   for part in rel.split(DirSep):
@@ -294,7 +294,7 @@ proc scanLibraryImpl(store: var Store; skipPhash: bool;
   var pending: seq[ScanWork]
   for path in paths:
     checkCancelled(cancel)
-    let rel = relativePath(path, store.library.root)
+    let rel = relCatalogPath(path, store.library.root)
     seen[rel] = true
     let info = getFileInfo(path)
     var work = ScanWork(path: path, rel: rel,
