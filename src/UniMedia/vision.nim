@@ -3,12 +3,26 @@
 
 ## Local semantic index with an explicit Ollama embedding adapter.
 
-import std/[algorithm, base64, httpclient, json, math, os, sequtils, strutils,
+import std/[algorithm, base64, httpclient, json, math, os, sequtils, streams, strutils,
   uri]
 import db_connector/db_sqlite
 import UniMedia/[store, types, thumbnails]
 
 const MaxVisionResponseBytes* = 16 * 1024 * 1024
+
+proc boundedBody(response: Response): string =
+  ## At most `MaxVisionResponseBytes`, read a chunk at a time.
+  ##
+  ## `response.body` reads the whole body first and the size check ran after
+  ## it, so a server answering with a gigabyte was believed for a gigabyte
+  ## before being refused. Reading one byte past the limit is what lets the
+  ## caller tell "at the limit" from "over it".
+  let stream = response.bodyStream
+  var chunk = newString(64 * 1024)
+  while result.len <= MaxVisionResponseBytes:
+    let read = stream.readData(addr chunk[0], chunk.len)
+    if read <= 0: break
+    result.add(chunk[0 ..< min(read, MaxVisionResponseBytes + 1 - result.len)])
 
 proc validateVector(values: openArray[float]) =
   if values.len == 0 or values.len > 65_536:
@@ -144,7 +158,7 @@ proc ollamaEmbedding*(endpoint, model, input: string;
     if response.code != Http200:
       raise newException(IOError, "Ollama embedding request failed: " &
         $response.code)
-    let body = response.body
+    let body = response.boundedBody
     if body.len == 0 or body.len > MaxVisionResponseBytes:
       raise newException(IOError, "Ollama response is empty or too large")
     let root = parseJson(body)
@@ -213,7 +227,7 @@ proc ollamaDescribe*(endpoint, model, imagePath: string;
     if response.code != Http200:
       raise newException(IOError, "Ollama description request failed: " &
         $response.code)
-    let responseBody = response.body
+    let responseBody = response.boundedBody
     if responseBody.len == 0 or responseBody.len > MaxVisionResponseBytes:
       raise newException(IOError, "Ollama response is empty or too large")
     let root = parseJson(responseBody)

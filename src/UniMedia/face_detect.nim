@@ -57,11 +57,25 @@ proc detectorObservations(backend, input: string): seq[FaceDetection] =
           not node.hasKey("detector") or node["detector"].kind != JString:
         raise newException(IOError,
           "face detector observation has an invalid shape")
-      result.add FaceDetection(x: node["x"].getFloat(),
-        y: node["y"].getFloat(), width: node["width"].getFloat(),
-        height: node["height"].getFloat(),
-        confidence: node["confidence"].getFloat(),
-        detector: node["detector"].getStr())
+      # Checked here, where the value is still a float. `signedObservation`
+      # converts these to int before it clamps, and a non-finite or huge value
+      # makes that conversion undefined -- the clamp never sees it.
+      let x = node["x"].getFloat()
+      let y = node["y"].getFloat()
+      let width = node["width"].getFloat()
+      let height = node["height"].getFloat()
+      let confidence = node["confidence"].getFloat()
+      for value in [x, y, width, height, confidence]:
+        if classify(value) notin {fcNormal, fcSubnormal, fcZero, fcNegZero}:
+          raise newException(IOError,
+            "face detector observation has a non-finite value")
+      if x < 0.0 or y < 0.0 or width <= 0.0 or height <= 0.0 or
+          x + width > 1.0 or y + height > 1.0 or
+          confidence < 0.0 or confidence > 1.0:
+        raise newException(IOError,
+          "face detector observation is outside the unit frame")
+      result.add FaceDetection(x: x, y: y, width: width, height: height,
+        confidence: confidence, detector: node["detector"].getStr())
   except JsonParsingError as error:
     raise newException(IOError, "invalid face detector JSON: " & error.msg)
   finally:
