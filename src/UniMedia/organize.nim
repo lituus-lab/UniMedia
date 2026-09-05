@@ -466,11 +466,22 @@ proc applyUndo*(store: var Store; requested: string;
             raise newException(IOError,
               "destination gained an XMP sidecar since apply: " & destination)
           removeFile(destination)
-          # The row goes with the file. A copy's undo takes the destination
-          # away, and leaving its catalogue entry behind would list a
-          # photograph that is no longer there — which the full rescan used to
-          # clean up on the library's time rather than the batch's.
-          store.db.exec(sql"DELETE FROM items WHERE rel_path=?", row[3])
+          # The row goes with the file -- unless this same batch is about to
+          # put a file back at that very path. A privacy strip journals the
+          # cleaned file as a copy over the item's own path and moves the
+          # original to the trash; undoing the move restores it there, so
+          # deleting the row here dropped the item's curation, album, face and
+          # vision data with it and the rescan created a new item with a new
+          # id. Otherwise the entry would list a photograph that is no longer
+          # there, which the full rescan used to clean up on the library's
+          # time rather than the batch's.
+          let restoredHere = store.db.getValue(sql"""
+            SELECT count(*) FROM batch_ops
+            WHERE batch_id=? AND kind=? AND source_path=?""",
+            result.batchId, $okMove,
+            store.library.root / row[3]).parseInt() > 0
+          if not restoredHere:
+            store.db.exec(sql"DELETE FROM items WHERE rel_path=?", row[3])
         else:
           let original = checkedPathUnder(sourceRoot, row[2])
           if fileExists(original):

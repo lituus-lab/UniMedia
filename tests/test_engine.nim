@@ -1279,6 +1279,13 @@ fi
     check blake3File(media) == originalHash
     check fileExists(sidecar)
     check "gps" in privacyAudit(store)[0].signals
+    # The undo puts the original back at the item's own path, so the catalogue
+    # row has to survive it: a new row means a new id, and everything hanging
+    # off the old one -- curation, albums, faces, vision -- goes with it.
+    let afterUndo = store.listItems()
+    check afterUndo.len == 1
+    check afterUndo[0].id == item.id
+    check getItemCuration(store, item.id).title == "Private title"
     store.close()
     removeDir(root)
 
