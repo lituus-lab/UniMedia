@@ -39,10 +39,9 @@ print(done["removed"], done["kept"], done["failed"])
 ## Plan and apply are separate
 
 ```python
-groups = lib.find_duplicates(kind="exact")
-review = lib.review_duplicates(groups)
-# look at review before this line
-lib.remove_duplicates(groups)
+run = lib.find_duplicates(kind="exact")   # groups them, returns the run id
+review = lib.review(run)                  # look at this before the next line
+lib.remove_duplicates(run)
 ```
 
 The apply rebuilds the plan from the same inputs, so a file that changed in
@@ -54,8 +53,12 @@ Long operations take a callback. Returning `True` from a cancel callback stops
 the run at the next safe point; what was already journalled is reconciled by the
 next call rather than left half-done.
 
+The Nim and C surfaces take the callbacks. The Python binding does not pass
+them yet: `scan` takes `skip_phash` and `jobs`, and hands the library `NULL`
+for both.
+
 ```python
-lib.scan(progress=lambda event: print(event["current"], "/", event["total"]))
+lib.scan(skip_phash=False, jobs=4)
 ```
 
 ## Errors

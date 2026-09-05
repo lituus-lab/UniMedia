@@ -291,8 +291,13 @@ proc curateItem*(store: var Store; itemId: int64;
   for keyword in removals: removalSet.incl keyword.toLowerAscii()
   recoverCurationOps(store)
   let item = store.getItem(itemId)
-  let path = sidecarPath(store, item)
-  let oldExists = fileExists(path)
+  # Only a file-backed item has a sidecar. `sidecarPath` goes through
+  # `absoluteItemPath`, which rejects a `rel_path` that is absolute or escapes
+  # the library -- and `addVirtualItem` stores whatever name it was given, so
+  # resolving here raised before the non-file branch below could answer.
+  let onDisk = item.source == "file"
+  let path = if onDisk: sidecarPath(store, item) else: ""
+  let oldExists = onDisk and fileExists(path)
   let oldXml = if oldExists: readFile(path) else: buildXmp(XmpData())
   result = stateFromXmp(item, oldXml)
   if patch.title.isSome:
