@@ -39,8 +39,11 @@ clock.
 
 nbCode:
   echo run("--library", sandbox.quoteShell, "catalog list")
-  echo run("--library", sandbox.quoteShell,
-    "dates set '2019-08-14 10:30:00' 1")
+  # `quoteShell` rather than apostrophes: it quotes for the platform, and
+  # cmd.exe does not treat an apostrophe as one -- the timestamp would arrive
+  # as two arguments there.
+  echo run("--library", sandbox.quoteShell, "dates set",
+    "2019-08-14 10:30:00".quoteShell, "1")
 
 nbText: """
 `DATE` means the correction reaches the file. `CATALOG` would mean it does not,
