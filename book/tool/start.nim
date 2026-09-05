@@ -12,8 +12,8 @@ nbInit(theme = useNimibook)
 # with its own folder as the current one, so a relative path lands elsewhere.
 const RepoRoot = currentSourcePath.parentDir.parentDir.parentDir
 let om = RepoRoot / "bin" / "om"
-# Its own directory per process: the book is built alongside the rest of
-# the suite, and a shared path means one run wiping another's fixtures.
+  # Its own directory per process: the book is built alongside the rest of
+  # the suite, and a shared path means one run wiping another's fixtures.
 let sandbox = getTempDir() / ("unimedia-book-tour-" & $getCurrentProcessId())
 removeDir(sandbox)
 createDir(sandbox / "inbox")
