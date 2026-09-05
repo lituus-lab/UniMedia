@@ -7,7 +7,9 @@ nbInit(theme = useNimibook)
 
 const RepoRoot = currentSourcePath.parentDir.parentDir.parentDir
 let om = RepoRoot / "bin" / "om"
-let sandbox = getTempDir() / "unimedia-book-find"
+# Its own directory per process: the book is built alongside the rest of
+# the suite, and a shared path means one run wiping another's fixtures.
+let sandbox = getTempDir() / ("unimedia-book-find-" & $getCurrentProcessId())
 removeDir(sandbox)
 createDir(sandbox)
 
@@ -19,7 +21,12 @@ for (name, red) in [("20240712_101500.ppm", 10), ("20240712_154500.ppm", 40),
   writeFile(sandbox / name, ppm(red))
 
 proc run(args: varargs[string]): string =
-  let (output, _) = execCmdEx(om.quoteShell & " " & args.join(" "))
+  ## A non-zero exit stops the book. Rendering the failure as output would
+  ## publish a page whose "result" is an error message.
+  let (output, code) = execCmdEx(om.quoteShell & " " & args.join(" "))
+  if code != 0:
+    raise newException(OSError,
+      "book: `om " & args.join(" ") & "` exited " & $code & "\n" & output)
   output.strip().replace(sandbox, "…")
 
 discard run("catalog init", sandbox.quoteShell, "--domain photo")

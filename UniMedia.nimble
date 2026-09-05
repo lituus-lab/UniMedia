@@ -56,6 +56,9 @@ task docsDeps, "Install the docs toolchain (nimib + nimibook)":
     exec "nimble install -y https://github.com/pietroppeter/nimibook@#v0.4.0"
 
 task book, "Build the multipage nimib book (needs nimib + nimibook)":
+  # The tool chapters drive the real binary, so it has to exist: without it
+  # they used to record `command not found` as the command's own output.
+  exec "nimble buildOm"
   # Every Nim chapter is compiled and run, so prose that outlives its API fails
   # the build rather than misleading a reader.
   withDir "book":

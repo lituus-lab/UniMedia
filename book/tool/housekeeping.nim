@@ -7,7 +7,9 @@ nbInit(theme = useNimibook)
 
 const RepoRoot = currentSourcePath.parentDir.parentDir.parentDir
 let om = RepoRoot / "bin" / "om"
-let sandbox = getTempDir() / "unimedia-book-house"
+# Its own directory per process: the book is built alongside the rest of
+# the suite, and a shared path means one run wiping another's fixtures.
+let sandbox = getTempDir() / ("unimedia-book-house-" & $getCurrentProcessId())
 removeDir(sandbox)
 createDir(sandbox / "2024" / "07" / "12")
 createDir(sandbox / "emptied")
@@ -22,7 +24,22 @@ writeFile(sandbox / ".DS_Store", "x")
 writeFile(sandbox / ".om-tmp-abandoned", "x")
 
 proc run(args: varargs[string]): string =
-  let (output, _) = execCmdEx(om.quoteShell & " " & args.join(" "))
+  ## A non-zero exit stops the book. Rendering the failure as output would
+  ## publish a page whose "result" is an error message.
+  let (output, code) = execCmdEx(om.quoteShell & " " & args.join(" "))
+  if code != 0:
+    raise newException(OSError,
+      "book: `om " & args.join(" ") & "` exited " & $code & "\n" & output)
+  output.strip().replace(sandbox, "…")
+
+proc runRefused(args: varargs[string]): string =
+  ## For the one command this chapter shows being turned down. A zero exit here
+  ## would mean the refusal stopped happening, which is the thing worth
+  ## catching -- so it fails the build just as an unexpected failure does.
+  let (output, code) = execCmdEx(om.quoteShell & " " & args.join(" "))
+  if code == 0:
+    raise newException(OSError,
+      "book: `om " & args.join(" ") & "` was expected to be refused, and was not")
   output.strip().replace(sandbox, "…")
 
 discard run("catalog init", sandbox.quoteShell, "--domain photo")
@@ -89,7 +106,7 @@ This is the only action here with no way back.
 
 nbCode:
   echo run("--library", sandbox.quoteShell, "trash empty --yes")
-  echo run("--library", sandbox.quoteShell, "undo apply --last --yes")
+  echo runRefused("--library", sandbox.quoteShell, "undo apply --last --yes")
 
 nbText: """
 The refusal is named rather than discovered. Emptying marks the batch, so undo
