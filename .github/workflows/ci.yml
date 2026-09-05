@@ -134,7 +134,7 @@ jobs:
         working-directory: lituus-lab/UniMedia
       - run: bash tools/nimble_task.sh testCiRelease
         working-directory: lituus-lab/UniMedia
-      - run: bash tools/nimble_task.sh cli
+      - run: bash tools/nimble_task.sh buildOm
         working-directory: lituus-lab/UniMedia
       # The example demo is part of the documented surface but no test pulled it
       # in; build and run it so a broken example fails CI.

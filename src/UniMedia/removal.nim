@@ -90,7 +90,7 @@ proc trashItems*(store: var Store; itemIds: seq[int64];
       VALUES(?,?,?,'delete',?)""", result.batchId, isoNow(), store.library.root,
       $bsApplying)
     for index, operation in operations:
-      let destinationRel = relativePath(operation.destination,
+      let destinationRel = relCatalogPath(operation.destination,
           store.library.root)
       store.db.exec(sql"""
         INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,status)
@@ -243,7 +243,7 @@ proc linkDuplicates*(store: var Store;
         INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
           content_hash,status)
         VALUES(?,?,?,?,?,?,?)""", result.batchId, nextSeq, $okHardlink,
-        keeper, relativePath(original, store.library.root), digest, $opsApplied)
+        keeper, relCatalogPath(original, store.library.root), digest, $opsApplied)
       inc nextSeq
       inc result.linked
     except CatchableError as error:
@@ -254,6 +254,6 @@ proc linkDuplicates*(store: var Store;
         INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
           status,error)
         VALUES(?,?,?,?,?,?,?)""", result.batchId, nextSeq, $okHardlink,
-        keeper, relativePath(original, store.library.root), $opsFailed,
+        keeper, relCatalogPath(original, store.library.root), $opsFailed,
         error.msg)
       inc nextSeq

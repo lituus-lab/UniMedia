@@ -87,7 +87,7 @@ proc prepare(store: Store; entry: PrivacyStripEntry; batchId: string;
     raise newException(IOError, "privacy strip source is missing: " & result.media)
   let trashRoot = store.library.root / TrashDirName / batchId / "strip" /
     $entry.itemId
-  result.mediaTrash = store.absoluteItemPath(relativePath(
+  result.mediaTrash = store.absoluteItemPath(relCatalogPath(
     trashRoot / result.media.extractFilename, store.library.root))
   result.temp = result.media.parentDir / (".om-tmp-" & batchId & "-" & $index)
   if fileExists(result.temp) or symlinkExists(result.temp):
@@ -99,7 +99,7 @@ proc prepare(store: Store; entry: PrivacyStripEntry; batchId: string;
     result.mediaHash = blake3File(result.media)
     result.strippedHash = blake3File(result.temp)
     for sidecar in xmpSidecars(result.media):
-      let trash = store.absoluteItemPath(relativePath(
+      let trash = store.absoluteItemPath(relCatalogPath(
         trashRoot / sidecar.extractFilename, store.library.root))
       result.sidecars.add (source: sidecar, trash: trash,
         digest: blake3File(sidecar))
@@ -145,14 +145,14 @@ proc applyPrivacyStrip*(store: var Store; plan: PrivacyStripPlan;
           INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
             content_hash,status) VALUES(?,?,?,?,?,?,?)""", result.batchId,
           sequence, $okMove, sidecar.source,
-          relativePath(sidecar.trash, store.library.root), sidecar.digest,
+          relCatalogPath(sidecar.trash, store.library.root), sidecar.digest,
           $opsPending)
         inc sequence
       store.db.exec(sql"""
         INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
           content_hash,status) VALUES(?,?,?,?,?,?,?)""", result.batchId,
         sequence, $okMove, operation.media,
-        relativePath(operation.mediaTrash, store.library.root),
+        relCatalogPath(operation.mediaTrash, store.library.root),
         operation.mediaHash, $opsPending)
       inc sequence
       store.db.exec(sql"""
@@ -172,7 +172,7 @@ proc applyPrivacyStrip*(store: var Store; plan: PrivacyStripPlan;
   for index, operation in prepared:
     var failed = false
     template transfer(source, destination: string) =
-      discard store.absoluteItemPath(relativePath(destination,
+      discard store.absoluteItemPath(relCatalogPath(destination,
         store.library.root))
       if fileExists(destination) or symlinkExists(destination):
         raise newException(IOError, "privacy strip destination is occupied")

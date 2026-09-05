@@ -159,7 +159,7 @@ proc prepareDateWrite(store: Store; entry: DateEditEntry; batchId: string;
     raise newException(IOError, "date edit source is missing: " & result.media)
   let trashRoot = store.library.root / TrashDirName / batchId / "date" /
     $entry.itemId
-  result.mediaTrash = store.absoluteItemPath(relativePath(
+  result.mediaTrash = store.absoluteItemPath(relCatalogPath(
     trashRoot / result.media.extractFilename, store.library.root))
   result.temp = result.media.parentDir / (".om-tmp-date-" & batchId & "-" & $index)
   if fileExists(result.temp) or symlinkExists(result.temp):
@@ -226,14 +226,14 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
             INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
               content_hash,status) VALUES(?,?,?,?,?,?,?)""", result.batchId,
             sequence, $okMove, sidecar.source,
-            relativePath(sidecar.trash, store.library.root), sidecar.digest,
+            relCatalogPath(sidecar.trash, store.library.root), sidecar.digest,
             $opsPending)
           inc sequence
         store.db.exec(sql"""
           INSERT INTO batch_ops(batch_id,seq,kind,source_path,dest_rel_path,
             content_hash,status) VALUES(?,?,?,?,?,?,?)""", result.batchId,
           sequence, $okMove, operation.media,
-          relativePath(operation.mediaTrash, store.library.root),
+          relCatalogPath(operation.mediaTrash, store.library.root),
           operation.mediaHash, $opsPending)
         inc sequence
         store.db.exec(sql"""
@@ -260,7 +260,7 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
     let base = sequence
     let rows = operation.sidecars.len + 2
     template transfer(source, destination: string) =
-      discard store.absoluteItemPath(relativePath(destination,
+      discard store.absoluteItemPath(relCatalogPath(destination,
         store.library.root))
       if fileExists(destination) or symlinkExists(destination):
         raise newException(IOError, "date edit destination is occupied")

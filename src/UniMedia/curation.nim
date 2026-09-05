@@ -373,7 +373,7 @@ proc curateItem*(store: var Store; itemId: int64;
     xmpPatch.properties[XmpLocation] = some(result.locationText)
   let newXml = mergeXmp(oldXml, xmpPatch)
   let id = opId()
-  let sidecarRel = relativePath(path, store.library.root)
+  let sidecarRel = relCatalogPath(path, store.library.root)
   store.db.exec(sql"BEGIN IMMEDIATE")
   try:
     store.db.exec(sql"""

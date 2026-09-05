@@ -7,19 +7,22 @@ import UniMedia/[types, store, catalog, hashing]
 
 proc datedRel(dateValue, filename, noDateDir: string;
               scheme: OrganizeScheme): string =
+  # `catalogPath` on the way out: `/` joins with the platform separator, so on
+  # Windows a scheme whose own format already contains `/` produced a mixed
+  # `2026/07-31\IMG.jpg` that no stored row could match.
   if dateValue.len < 10:
-    return noDateDir / filename
+    return (noDateDir / filename).catalogPath
   let stamp = try: parse(dateValue[0..9], "yyyy-MM-dd")
-              except ValueError: return noDateDir / filename
+              except ValueError: return (noDateDir / filename).catalogPath
   case scheme
   of osYearMonthDayDash:
-    stamp.format("yyyy/MM-dd") / filename
+    (stamp.format("yyyy/MM-dd") / filename).catalogPath
   of osYearMonthDay:
-    stamp.format("yyyy/MM/dd") / filename
+    (stamp.format("yyyy/MM/dd") / filename).catalogPath
   of osYearMonth:
-    stamp.format("yyyy/MM") / filename
+    (stamp.format("yyyy/MM") / filename).catalogPath
   of osYearDate:
-    stamp.format("yyyy/yyyy-MM-dd") / filename
+    (stamp.format("yyyy/yyyy-MM-dd") / filename).catalogPath
   of osFlat:
     stamp.format("yyyy-MM-dd") & "_" & filename
 
@@ -28,7 +31,7 @@ proc isHidden(root, path: string): bool =
   ##
   ## The same rule the scan applies, so a file the catalogue would never index
   ## is not one an import copies in.
-  let rel = relativePath(path, root)
+  let rel = relCatalogPath(path, root)
   for part in rel.split(DirSep):
     if part.startsWith('.'): return true
   false
@@ -232,7 +235,7 @@ proc recoverInterruptedBatches*(store: var Store) =
               message = ""
               if row[1] == $okDelete:
                 let original = checkedPathUnder(store.library.root, row[2])
-                let originalRel = relativePath(original, store.library.root)
+                let originalRel = relCatalogPath(original, store.library.root)
                 store.db.exec(sql"UPDATE items SET deleted_at=? WHERE rel_path=?",
                   isoNow(), originalRel)
             else:
@@ -320,7 +323,7 @@ proc applyPlan*(store: var Store; plan: OrganizePlan;
       try:
         if operation.kind == okMove and source.startsWith(
             store.library.root & DirSep):
-          let oldRel = relativePath(source, store.library.root)
+          let oldRel = relCatalogPath(source, store.library.root)
           store.db.exec(sql"""
             UPDATE items SET rel_path=?,indexed_at=? WHERE rel_path=?""",
             operation.destRelPath, isoNow(), oldRel)
@@ -441,12 +444,12 @@ proc applyUndo*(store: var Store; requested: string;
             raise newException(IOError,
               "restored original changed before undo recovery: " & original)
           if row[1] == $okDelete:
-            let originalRel = relativePath(original, store.library.root)
+            let originalRel = relCatalogPath(original, store.library.root)
             store.db.exec(sql"""
               UPDATE items SET deleted_at=NULL,indexed_at=? WHERE rel_path=?""",
               isoNow(), originalRel)
           elif original.startsWith(store.library.root & DirSep):
-            let originalRel = relativePath(original, store.library.root)
+            let originalRel = relCatalogPath(original, store.library.root)
             store.db.exec(sql"""
               UPDATE items SET rel_path=?,indexed_at=? WHERE rel_path=?""",
               originalRel, isoNow(), row[3])
@@ -526,12 +529,12 @@ proc applyUndo*(store: var Store; requested: string;
           if original.startsWith(store.library.root & DirSep):
             restored.add original
           if row[1] == $okDelete:
-            let originalRel = relativePath(original, store.library.root)
+            let originalRel = relCatalogPath(original, store.library.root)
             store.db.exec(sql"""
               UPDATE items SET deleted_at=NULL,indexed_at=? WHERE rel_path=?""",
               isoNow(), originalRel)
           elif original.startsWith(store.library.root & DirSep):
-            let originalRel = relativePath(original, store.library.root)
+            let originalRel = relCatalogPath(original, store.library.root)
             store.db.exec(sql"UPDATE items SET rel_path=?,indexed_at=? WHERE rel_path=?",
               originalRel, isoNow(), row[3])
         store.db.exec(sql"UPDATE batch_ops SET status=?,error=NULL WHERE id=?",
