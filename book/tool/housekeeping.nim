@@ -32,14 +32,19 @@ proc run(args: varargs[string]): string =
       "book: `om " & args.join(" ") & "` exited " & $code & "\n" & output)
   output.strip().replace(sandbox, "…")
 
-proc runRefused(args: varargs[string]): string =
-  ## For the one command this chapter shows being turned down. A zero exit here
-  ## would mean the refusal stopped happening, which is the thing worth
-  ## catching -- so it fails the build just as an unexpected failure does.
+proc runRefused(because: string; args: varargs[string]): string =
+  ## For the one command this chapter shows being turned down.
+  ##
+  ## The reason, not just the failure: a zero exit would mean the refusal
+  ## stopped happening, and any other non-zero one -- a parser error, a broken
+  ## database -- would be published as though it were the refusal being taught.
   let (output, code) = execCmdEx(om.quoteShell & " " & args.join(" "))
   if code == 0:
     raise newException(OSError,
       "book: `om " & args.join(" ") & "` was expected to be refused, and was not")
+  if because notin output:
+    raise newException(OSError, "book: `om " & args.join(" ") &
+      "` failed for another reason than " & because.escape & ":\n" & output)
   output.strip().replace(sandbox, "…")
 
 discard run("catalog init", sandbox.quoteShell, "--domain photo")
@@ -106,7 +111,8 @@ This is the only action here with no way back.
 
 nbCode:
   echo run("--library", sandbox.quoteShell, "trash empty --yes")
-  echo runRefused("--library", sandbox.quoteShell, "undo apply --last --yes")
+  echo runRefused("emptied from the trash",
+    "--library", sandbox.quoteShell, "undo apply --last --yes")
 
 nbText: """
 The refusal is named rather than discovered. Emptying marks the batch, so undo
