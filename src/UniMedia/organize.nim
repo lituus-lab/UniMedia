@@ -31,8 +31,10 @@ proc isHidden(root, path: string): bool =
   ##
   ## The same rule the scan applies, so a file the catalogue would never index
   ## is not one an import copies in.
+  # The catalogue's separator, not the platform's: `rel` is already normalised,
+  # so `DirSep` matched nothing on Windows and no component was ever hidden.
   let rel = relCatalogPath(path, root)
-  for part in rel.split(DirSep):
+  for part in rel.split(CatalogSep):
     if part.startsWith('.'): return true
   false
 
@@ -45,7 +47,10 @@ proc uniqueRel(store: Store; wanted: string; policy: ConflictPolicy;
   let parts = splitFile(wanted)
   var index = 1
   while true:
-    let candidate = parts.dir / (parts.name & "_" & $index & parts.ext)
+    # `/` joins with the platform separator, and a candidate carrying `\` would
+    # match neither a reserved name nor a stored row.
+    let candidate = (parts.dir / (parts.name & "_" & $index &
+        parts.ext)).catalogPath
     if not reserved.hasKey(candidate) and not fileExists(store.absoluteItemPath(candidate)):
       reserved[candidate] = true
       return (candidate, "")
