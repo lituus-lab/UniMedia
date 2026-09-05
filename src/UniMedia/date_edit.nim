@@ -252,6 +252,13 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
   var writtenFor = initHashSet[int64]()
   var sequence = 0
   for operation in prepared:
+    # Each operation owns a fixed block of rows -- one per sidecar, one for the
+    # media move, one for the corrected copy -- written in that order above.
+    # `transfer` only advances the counter after a successful UPDATE, so a
+    # failure part-way through left the remaining rows of this operation
+    # unvisited and the next operation writing its statuses over them.
+    let base = sequence
+    let rows = operation.sidecars.len + 2
     template transfer(source, destination: string) =
       discard store.absoluteItemPath(relativePath(destination,
         store.library.root))
@@ -277,6 +284,7 @@ proc applyDateEdit*(store: var Store; plan: DateEditPlan;
       result.failures.add CurationBatchFailure(itemId: operation.itemId,
         relPath: operation.relPath, error: error.msg)
       if fileExists(operation.temp): removeFile(operation.temp)
+    sequence = base + rows
 
   if prepared.len > 0:
     let pending = store.db.getValue(sql"""
