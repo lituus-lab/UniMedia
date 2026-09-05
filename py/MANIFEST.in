@@ -1,0 +1,8 @@
+include README.md
+include pyproject.toml
+include setup.py
+recursive-include unimedia *.py *.pyx *.c
+# The vendored Nim tree setup.py writes before `sdist`: without it the sdist
+# has no library to build, and `pip install` from source fails.
+recursive-include _nimsrc *.nim *.nimble *.nims *.cfg *.h
+global-exclude *.dll *.dylib *.so *.a *.lib *.o *.obj
