@@ -61,12 +61,16 @@ int main(void) {
 
   /* A folder that is not a library yet: the caller can tell, and can make one
    * without the user writing a config by hand. */
-  char fresh[600], fresh_image[600];
+  char fresh[600];
+  /* Room for the longest name written into it, so the compiler can see the
+   * result cannot be truncated: GCC refuses an equal-sized destination. */
+  char fresh_image[sizeof fresh + 16];
   /* A sibling, not a child: a folder inside the library would be scanned as
    * part of it. */
-  snprintf(fresh, sizeof fresh, "%s-fresh", root);
+  assert(snprintf(fresh, sizeof fresh, "%s-fresh", root) < (int)sizeof fresh);
   assert(mkdir(fresh, 0755) == 0);
-  snprintf(fresh_image, sizeof fresh_image, "%s/photo.ppm", fresh);
+  assert(snprintf(fresh_image, sizeof fresh_image, "%s/photo.ppm", fresh) <
+         (int)sizeof fresh_image);
   write_ppm(fresh_image, 5);
 
   int present = 1;

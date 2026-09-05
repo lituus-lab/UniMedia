@@ -371,6 +371,10 @@ jobs:
           nim-version: '2.2.10'
       - run: bash tools/nimble_task.sh install --depsOnly -y
         working-directory: lituus-lab/UniMedia
+      # The nimib book links markdown, which loads libpcre at run time.
+      # ubuntu-24.04 stopped shipping it, so the book compiles and the binary
+      # dies on the first run: `could not load: libpcre.so(.3|.1|)`.
+      - run: sudo apt-get update && sudo apt-get install -y libpcre3
       - run: bash tools/nimble_task.sh docsDeps
         working-directory: lituus-lab/UniMedia
       # nimib runs the book's code against this build: a stale book fails here.

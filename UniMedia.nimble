@@ -182,7 +182,10 @@ task coverage, "LCOV + HTML coverage for the engine sources":
   exec "./build/test_coverage"
   exec "lcov --capture --directory " & cache & " --base-directory ." &
        " --include \"*/src/UniMedia/*\" --output-file lcov.info --quiet" &
-       " --ignore-errors gcov,gcov"
+       # `mismatch` too: lcov 2.x and gcov disagree on the end line of the
+       # destructors Nim generates, a compiler artefact with no source-level
+       # fix. Every other lcov error still fails the task.
+       " --ignore-errors gcov,gcov,mismatch"
   # Nim can map generated end-of-procedure code one line past the source EOF.
   exec "genhtml lcov.info --output-directory coverage --legend --quiet" &
        " --ignore-errors range,range"
