@@ -161,9 +161,21 @@ task clibStatic, "C static library":
 task clib, "C shared library":
   mkDir "build"
   exec "nim c --app:lib --noMain --mm:arc -d:release --path:src " &
-    "-o:build/libUniMedia" & (when defined(macosx): ".dylib" else: ".so") &
+    "-o:build/libUniMedia" & (when defined(windows): ".dll"
+                              elif defined(macosx): ".dylib" else: ".so") &
     " src/UniMedia/c_api.nim"
   done "clib"
+
+task clibMsvc, "C static library, MSVC ABI (Windows Python extension)":
+  # CPython on Windows is MSVC-built and cannot link MinGW output. MSVC's
+  # linker takes the lib name verbatim, no `lib` prefix, so the output is
+  # UniMedia.lib -- which is the name py/setup.py already looks for under
+  # build/, and which nothing here produced until now.
+  mkDir "build"
+  exec "nim c --cc:vcc --app:staticlib --noMain --mm:arc -d:release" &
+    " -d:staticNoAutoInit --path:src -o:build/UniMedia.lib" &
+    " src/UniMedia/c_api.nim"
+  done "clibMsvc"
 
 task ctest, "Compile and run the C ABI test against the header":
   exec gate("clibStatic")
@@ -206,10 +218,12 @@ task cexample, "C demo (print-only consumer of the um_* ABI)":
   exec "./build/c_demo"
   done "cexample"
 
-# The extension links the shared library; the family's Windows MSVC split does
-# not apply here, since setup.py builds against libUniMedia directly.
+# The extension links the vcc static lib on Windows, the shared lib elsewhere.
 task pyLib, "Build the library the Python extension links against":
-  exec gate("clib")
+  when defined(windows):
+    exec gate("clibMsvc")
+  else:
+    exec gate("clib")
   done "pyLib"
 
 task pyDeps, "Install the Python build dependencies":
@@ -221,7 +235,7 @@ task pyDeps, "Install the Python build dependencies":
   done "pyDeps"
 
 task buildCython, "Build the Cython extension in place":
-  exec gate("clib")
+  exec gate("pyLib")
   # nimscript `cd` changes the VM cwd for the next exec without a shell, so
   # the task works under nimble's no-shell exec on Windows.
   cd "py"
