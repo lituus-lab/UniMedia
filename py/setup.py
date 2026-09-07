@@ -32,8 +32,12 @@ else:
     LIB_NAME, BUNDLED = "libUniMedia.so", True
     LINK_ARGS = ["-Wl,-rpath,$ORIGIN"]
 
-# db_connector reaches SQLite, and std/sysrand reaches Security on macOS.
-SYSTEM_LIBS = ["sqlite3"]
+# std/sysrand reaches Security on macOS; SQLite needs nothing here.
+# db_connector binds SQLite with `dynlib`, so the symbols are resolved
+# by the loader at run time and no link-time library is involved. Naming it
+# here cost nothing on Linux and macOS, where the system carries one, and broke
+# Windows outright -- neither MinGW nor MSVC ships a sqlite3 import library.
+SYSTEM_LIBS: list[str] = []
 FRAMEWORKS = ["-framework", "Security"] if sys.platform == "darwin" else []
 
 
