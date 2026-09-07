@@ -16,6 +16,15 @@
 #include <string.h>
 #include <sys/stat.h>
 
+/* MinGW's mkdir takes the path alone; POSIX takes a mode with it. One name
+ * here rather than an #ifdef at the call site. */
+#ifdef _WIN32
+#include <direct.h>
+#define make_dir(path) _mkdir(path)
+#else
+#define make_dir(path) mkdir((path), 0755)
+#endif
+
 static int progress_calls;
 
 static void count_progress(const char *phase, int current, int total,
@@ -68,7 +77,7 @@ int main(void) {
   /* A sibling, not a child: a folder inside the library would be scanned as
    * part of it. */
   assert(snprintf(fresh, sizeof fresh, "%s-fresh", root) < (int)sizeof fresh);
-  assert(mkdir(fresh, 0755) == 0);
+  assert(make_dir(fresh) == 0);
   assert(snprintf(fresh_image, sizeof fresh_image, "%s/photo.ppm", fresh) <
          (int)sizeof fresh_image);
   write_ppm(fresh_image, 5);
