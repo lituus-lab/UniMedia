@@ -184,13 +184,18 @@ task ctest, "Compile and run the C ABI test against the header":
   # system HEIC decoder UniImage uses there reaches ImageIO. A `passL` inside a
   # dependency does not travel into an archive, so every framework the archive
   # needs is named here or the link fails at the caller.
+  # No -lsqlite3: db_connector binds SQLite with `dynlib`, so the loader
+  # resolves it at run time and there is nothing to link against. Naming it was
+  # harmless where the system ships one and fatal on Windows, where neither
+  # MinGW nor MSVC does. Measured: the archive links and the test runs without.
   let systemLibs = when defined(macosx):
-                     " -lsqlite3 -framework Security -framework ImageIO" &
+                     " -framework Security -framework ImageIO" &
                      " -framework CoreFoundation -framework CoreGraphics"
                    # -lm because glibc keeps the maths functions out of libc
                    # and UniAudio's chroma and AIFF code calls them; macOS has
                    # them in libSystem, which is why only Linux failed to link.
-                   else: " -lsqlite3 -lm"
+                   elif defined(windows): ""
+                   else: " -lm"
   exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/test_abi " &
     "tests/c/test_abi.c build/libUniMedia.a" & systemLibs
   # A fresh library each run: the test asserts exact item counts.
@@ -209,10 +214,15 @@ task cexample, "C demo (print-only consumer of the um_* ABI)":
   # The C demo is part of the documented surface; nothing else builds it, so
   # a header change that breaks a caller shows up here rather than downstream.
   exec gate("clibStatic")
+  # No -lsqlite3: db_connector binds SQLite with `dynlib`, so the loader
+  # resolves it at run time and there is nothing to link against. Naming it was
+  # harmless where the system ships one and fatal on Windows, where neither
+  # MinGW nor MSVC does. Measured: the archive links and the test runs without.
   let systemLibs = when defined(macosx):
-                     " -lsqlite3 -framework Security -framework ImageIO" &
+                     " -framework Security -framework ImageIO" &
                      " -framework CoreFoundation -framework CoreGraphics"
-                   else: " -lsqlite3 -lm"
+                   elif defined(windows): ""
+                   else: " -lm"
   exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/c_demo " &
     "examples/c/demo.c build/libUniMedia.a" & systemLibs
   exec "./build/c_demo"
