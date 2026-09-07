@@ -27,11 +27,43 @@ requires "https://github.com/lbartoletti/NimContracts#main"
 # nim.cfg's path, so this repo supplies the dependency itself.
 requires "https://github.com/lbartoletti/nimsimd#master"
 
+# nimble 0.22 exits 0 even when an `exec` inside a task fails, so a task's exit
+# code says nothing about whether its body ran. Each task writes a marker as
+# its last statement; `tools/gate.nim` removes the marker, runs the task, and
+# fails if it is not there afterwards. `nimble canary` proves nothing on its
+# own -- `build/unigate canary` is the call that does, and if it ever passes,
+# every other green result is worthless.
+const gateExe =
+  when defined(windows): "build/unigate.exe" else: "build/unigate"
+
+template done(task: string) =
+  mkDir "build/.gate"
+  writeFile("build/.gate/" & task & ".ok", "")
+
+proc gate(task: string): string =
+  ## `exec gate("test")` -- builds the tool only when it is missing, and that is
+  ## deliberate. Every call here happens inside a task the gate binary is
+  ## already running, and Windows locks a running executable against being
+  ## overwritten. Freshness is enforced where the gate is invoked instead: CI
+  ## compiles it at the start of every job, and tools/hooks/gated.sh rebuilds
+  ## it when the source is newer.
+  if not fileExists(gateExe):
+    exec "nim c --hints:off -o:" & gateExe & " tools/gate.nim"
+  gateExe & " " & task
+
+task canary, "Must fail: proves the gate still catches a broken build":
+  # No `done` here on purpose: the exec below raises, so the marker is never
+  # written and the gate reports the failure nimble swallowed.
+  exec "nim c -r --hints:off --path:src -o:build/canary tests/canary_broken.nim"
+
+
 task lint, "Fail if nimpretty would reformat a source":
   exec "nim c -r --hints:off -o:build/lint_tool tools/lint.nim"
+  done "lint"
 
 task checkVGraph, "Fail on an import that climbs the layers":
   exec "nim c -r --hints:off -o:build/vgraph_tool tools/vgraph.nim"
+  done "checkVGraph"
 
 task buildOm, "Build the om binary":
   # `nim c`, not `nimble build`: nimble appends each dependency's declared
@@ -40,6 +72,7 @@ task buildOm, "Build the om binary":
   # that is not there. A task's own compile resolves them through nimblePath
   # instead, which is what every other task here relies on.
   exec "nim c -d:release --hints:off --path:src -o:bin/om src/om.nim"
+  done "buildOm"
 
 task docsDeps, "Install the docs toolchain (nimib + nimibook)":
   # Not in `requires`: nimibook pulls a whole graphical stack -- pixie, x11,
@@ -62,45 +95,54 @@ task docsDeps, "Install the docs toolchain (nimib + nimibook)":
   exec "nim c --hints:off --verbosity:0 -o:build/docsdeps_probe" &
        " build/docsdeps_probe.nim"
   rmFile "build/docsdeps_probe.nim"
+  done "docsDeps"
 
 task book, "Build the multipage nimib book (needs nimib + nimibook)":
   # The tool chapters drive the real binary, so it has to exist: without it
   # they used to record `command not found` as the command's own output.
-  exec "nimble buildOm"
+  exec gate("buildOm")
   # Every Nim chapter is compiled and run, so prose that outlives its API fails
   # the build rather than misleading a reader.
   withDir "book":
     exec "nim c -r --path:../src --hints:off -o:../build/nbook nbook.nim init"
     exec "nim c -r --path:../src --hints:off -o:../build/nbook nbook.nim clean"
     exec "nim c -r --path:../src --hints:off -o:../build/nbook nbook.nim build"
+  done "book"
 
 task docs, "Build API reference and book into pages/":
   rmDir "pages"
   exec "nim doc --path:src --index:on --outdir:pages/api --project --hints:off src/UniMedia.nim"
-  exec "nimble book"
+  exec gate("book")
   cpDir "book/__site", "pages/book"
   cpFile "book/__site/index.html", "pages/index.html"
+  done "docs"
 
 task test, "Run the debug test suite":
   exec "nim c -r --path:src -o:build/test_all tests/test_all.nim"
+  done "test"
 
 task testRelease, "Run the release test suite":
   exec "nim c -r -d:release --path:src -o:build/test_all_rel tests/test_all.nim"
+  done "testRelease"
 
 task testCi, "Run the CI debug suite":
-  exec "nimble test"
+  exec gate("test")
+  done "testCi"
 
 task testCiRelease, "Run the CI release suite":
-  exec "nimble testRelease"
+  exec gate("testRelease")
+  done "testCiRelease"
 
 task testAll, "Build and run debug + release tests, the CLI and the C ABI":
-  exec "nimble test"
-  exec "nimble testRelease"
-  exec "nimble buildOm"
-  exec "nimble ctest"
+  exec gate("test")
+  exec gate("testRelease")
+  exec gate("buildOm")
+  exec gate("ctest")
+  done "testAll"
 
 task example, "Run the Nim engine example":
   exec "nim c -r --path:src -o:build/demo examples/demo.nim"
+  done "example"
 
 task appleVision, "Build the optional macOS Apple Vision face detector":
   when defined(macosx):
@@ -108,20 +150,23 @@ task appleVision, "Build the optional macOS Apple Vision face detector":
     exec "swiftc -O -o build/unimedia-apple-vision tools/unimedia_apple_vision.swift"
   else:
     echo "Apple Vision is available only on macOS"
+  done "appleVision"
 
 task clibStatic, "C static library":
   mkDir "build"
   exec "nim c --app:staticlib -d:staticNoAutoInit --noMain --mm:arc -d:release --path:src " &
     "-o:build/libUniMedia.a src/UniMedia/c_api.nim"
+  done "clibStatic"
 
 task clib, "C shared library":
   mkDir "build"
   exec "nim c --app:lib --noMain --mm:arc -d:release --path:src " &
     "-o:build/libUniMedia" & (when defined(macosx): ".dylib" else: ".so") &
     " src/UniMedia/c_api.nim"
+  done "clib"
 
 task ctest, "Compile and run the C ABI test against the header":
-  exec "nimble clibStatic"
+  exec gate("clibStatic")
   # The static library carries no transitive link information: SQLite comes from
   # db_connector, std/sysrand reaches Security.framework on macOS, and the
   # system HEIC decoder UniImage uses there reaches ImageIO. A `passL` inside a
@@ -142,10 +187,11 @@ task ctest, "Compile and run the C ABI test against the header":
   # as part of the library it is meant to be separate from.
   rmDir "build/ctest-lib-fresh"
   mkDir "build/ctest-lib/inbox"
-  exec "nimble buildOm"
+  exec gate("buildOm")
   exec "bin/om catalog init build/ctest-lib --domain photo"
   putEnv "UNIMEDIA_C_TEST_DIR", getCurrentDir() & "/build/ctest-lib"
   exec "./build/test_abi"
+  done "ctest"
 
 task pyDeps, "Install the Python build dependencies":
   # The family's line, verbatim: a Homebrew or distribution Python refuses to
@@ -153,23 +199,35 @@ task pyDeps, "Install the Python build dependencies":
   # sources assume.
   exec "python3 -m pip install --break-system-packages --quiet setuptools " &
        "wheel \"Cython>=3.0.0\" pytest"
+  done "pyDeps"
 
 task buildCython, "Build the Cython extension in place":
-  exec "nimble clib"
-  exec "cd py && python3 setup.py build_ext --inplace"
+  exec gate("clib")
+  # nimscript `cd` changes the VM cwd for the next exec without a shell, so
+  # the task works under nimble's no-shell exec on Windows.
+  cd "py"
+  exec "python3 setup.py build_ext --inplace"
+  cd ".."
+  done "buildCython"
 
 task pyTest, "Cython extension + pytest":
-  exec "nimble buildOm"
-  exec "nimble buildCython"
-  exec "cd py && python3 -m pytest tests -q"
+  exec gate("buildOm")
+  exec gate("buildCython")
+  cd "py"
+  exec "python3 -m pytest tests -q"
+  cd ".."
+  done "pyTest"
 
 task pyWheel, "Build the Python wheel":
-  exec "nimble clib"
-  exec "nimble pyDeps"
+  exec gate("clib")
+  exec gate("pyDeps")
   # setup.py rather than `pip wheel .`, as the rest of the family does: pip
   # builds in an isolated subprocess whose path a broken editable install
   # elsewhere on the machine can corrupt, and the failure then names neither.
-  exec "cd py && python3 setup.py bdist_wheel"
+  cd "py"
+  exec "python3 setup.py bdist_wheel"
+  cd ".."
+  done "pyWheel"
 
 task testNoSsl, "Build without SSL and check the geocoder says so":
   # The refusal lives behind `when not defined(ssl)`, so no test compiled with
@@ -177,6 +235,7 @@ task testNoSsl, "Build without SSL and check the geocoder says so":
   # must fail, which is the only way that branch is exercised at all.
   exec "nim c --hints:off -d:noSsl --path:src -o:build/om_nossl src/om.nim"
   exec "nim c -r --hints:off --path:src -o:build/test_nossl tests/test_nossl.nim"
+  done "testNoSsl"
 
 task coverage, "LCOV + HTML coverage for the engine sources":
   let cache = "build/covcache"
@@ -204,3 +263,4 @@ task coverage, "LCOV + HTML coverage for the engine sources":
   exec "genhtml lcov.info" & genhtmlRange &
        " --output-directory coverage --legend --quiet"
   exec "lcov --summary lcov.info"
+  done "coverage"
