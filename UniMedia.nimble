@@ -207,7 +207,8 @@ task ctest, "Compile and run the C ABI test against the header":
   exec gate("buildOm")
   exec "bin/om catalog init build/ctest-lib --domain photo"
   putEnv "UNIMEDIA_C_TEST_DIR", getCurrentDir() & "/build/ctest-lib"
-  exec "./build/test_abi"
+  # MinGW appends .exe, and nimble's exec runs no shell to paper over it.
+  exec "./build/test_abi" & (when defined(windows): ".exe" else: "")
   done "ctest"
 
 task cexample, "C demo (print-only consumer of the um_* ABI)":
@@ -225,7 +226,7 @@ task cexample, "C demo (print-only consumer of the um_* ABI)":
                    else: " -lm"
   exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/c_demo " &
     "examples/c/demo.c build/libUniMedia.a" & systemLibs
-  exec "./build/c_demo"
+  exec "./build/c_demo" & (when defined(windows): ".exe" else: "")
   done "cexample"
 
 # The extension links the vcc static lib on Windows, the shared lib elsewhere.
