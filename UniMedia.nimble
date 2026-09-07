@@ -193,6 +193,25 @@ task ctest, "Compile and run the C ABI test against the header":
   exec "./build/test_abi"
   done "ctest"
 
+task cexample, "C demo (print-only consumer of the um_* ABI)":
+  # The C demo is part of the documented surface; nothing else builds it, so
+  # a header change that breaks a caller shows up here rather than downstream.
+  exec gate("clibStatic")
+  let systemLibs = when defined(macosx):
+                     " -lsqlite3 -framework Security -framework ImageIO" &
+                     " -framework CoreFoundation -framework CoreGraphics"
+                   else: " -lsqlite3 -lm"
+  exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/c_demo " &
+    "examples/c/demo.c build/libUniMedia.a" & systemLibs
+  exec "./build/c_demo"
+  done "cexample"
+
+# The extension links the shared library; the family's Windows MSVC split does
+# not apply here, since setup.py builds against libUniMedia directly.
+task pyLib, "Build the library the Python extension links against":
+  exec gate("clib")
+  done "pyLib"
+
 task pyDeps, "Install the Python build dependencies":
   # The family's line, verbatim: a Homebrew or distribution Python refuses to
   # install into itself without the flag, and Cython 3 is what the generated
