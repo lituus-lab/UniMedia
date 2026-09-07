@@ -43,7 +43,16 @@ checked locally by the pre-commit hook below.
 ## Workflow
 
 1. Branch from `main`, one logical change per commit.
-2. Pass the gates: `nimble testAll`, `nimble lint`, `nimble checkVGraph`.
+2. Pass the gates, through the wrapper and never bare:
+
+   ```bash
+   tools/hooks/gated.sh testAll
+   tools/hooks/gated.sh pyTest
+   ```
+
+   The wrapper builds the gate and rebuilds it whenever `tools/gate.nim` is
+   newer. `nimble testAll` on its own exits 0 even when a task inside it
+   failed; that is the whole reason the gate exists.
 3. Open a PR; CI runs the 3-OS Nim matrix, docs, lint and dependency graph checks.
 
 ## Pre-commit
