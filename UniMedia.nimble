@@ -175,8 +175,18 @@ task clibMsvc, "C static library, MSVC ABI (Windows Python extension)":
   # UniMedia.lib -- which is the name py/setup.py already looks for under
   # build/, and which nothing here produced until now.
   mkDir "build"
+  # -d:ssl pulls in Nim's OpenSSL wrapper, which loads libcrypto during module
+  # initialization. Its default Windows name is libcrypto-1_1-x64.dll, which
+  # nothing on a runner carries; CPython ships its own OpenSSL under
+  # libcrypto-<major>.dll. Asking the interpreter which it has, and naming that
+  # version here, is what lets setup.py ship a matching copy -- a 1.1 name over
+  # a 3.x library would resolve and then fail on a missing symbol.
+  let sslMajor = gorgeEx("python -c \"import ssl;" &
+    "print(ssl.OPENSSL_VERSION_INFO[0])\"").output.strip
+  let sslVersion = if sslMajor == "1": "1_1" else: sslMajor
   exec "nim c --cc:vcc --app:staticlib --noMain --mm:arc -d:release" &
-    " -d:staticNoAutoInit --path:src -o:build/UniMedia.lib" &
+    " -d:staticNoAutoInit -d:sslVersion:" & sslVersion &
+    " --path:src -o:build/UniMedia.lib" &
     " src/UniMedia/c_api.nim"
   done "clibMsvc"
 

@@ -20,21 +20,29 @@ Albums, people, places and searches hang off the same handle::
 A few things do not need a library open: whether an optional external tool is
 installed, and what a media file is.
 """
-# Before the extension: the engine asks the loader for sqlite3_64.dll by bare
-# name, and on Windows setup.py puts a copy beside this file. Loading it here
-# by full path is what makes that name resolve -- add_dll_directory would not,
-# because it only affects loads that pass LOAD_LIBRARY_SEARCH_USER_DIRS and
-# Nim's `dynlib` calls plain LoadLibrary. Once the module is in the process,
-# a load by base name returns the handle already open.
+# Before the extension: the engine loads SQLite and OpenSSL by bare name during
+# its own initialization, and Windows carries neither under the names asked for.
+# setup.py puts copies beside this file; loading them here by full path is what
+# makes those names resolve. add_dll_directory would not -- it only affects
+# loads passing LOAD_LIBRARY_SEARCH_USER_DIRS, and Nim's `dynlib` calls plain
+# LoadLibrary. Once a module is in the process, a load by base name returns the
+# handle already open.
 import ctypes as _ctypes
+import glob as _glob
 import os as _os
 import sys as _sys
 
 if _sys.platform == "win32":
-    _sqlite = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                            "sqlite3_64.dll")
-    if _os.path.exists(_sqlite):
-        _ctypes.WinDLL(_sqlite)
+    _here = _os.path.dirname(_os.path.abspath(__file__))
+    # libcrypto before libssl: the second links the first, and loading a
+    # dependency by path first is what keeps the loader from looking for it
+    # anywhere else.
+    for _name in ("libcrypto-", "libssl-", "sqlite3_64.dll"):
+        for _dll in sorted(_glob.glob(_os.path.join(_here, _name + "*.dll"))
+                           if _name.endswith("-")
+                           else [_os.path.join(_here, _name)]):
+            if _os.path.exists(_dll):
+                _ctypes.WinDLL(_dll)
 
 from ._core import (
     Library, UniMediaError, abi_version, apple_double_verdict,
