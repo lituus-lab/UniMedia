@@ -25,6 +25,20 @@
 #define make_dir(path) mkdir((path), 0755)
 #endif
 
+/* "Absolute" differs by platform: a leading slash on POSIX, a drive letter and
+ * a separator on Windows, where the engine returns either separator. */
+static int is_absolute(const char *path) {
+  if (path == NULL || path[0] == '\0') return 0;
+#ifdef _WIN32
+  if (path[0] == '/' || path[0] == '\\') return 1;
+  return ((path[0] >= 'A' && path[0] <= 'Z') ||
+          (path[0] >= 'a' && path[0] <= 'z')) &&
+         path[1] == ':' && (path[2] == '/' || path[2] == '\\');
+#else
+  return path[0] == '/';
+#endif
+}
+
 static int progress_calls;
 
 static void count_progress(const char *phase, int current, int total,
@@ -610,7 +624,10 @@ int main(void) {
   assert(strstr(out, "\"id\":1") != NULL);
   um_buffer_free(out);
   assert(um_item_path(lib, 1, &out) == UM_OK);
-  assert(out[0] == '/');            /* absolute, unlike the listing's path */
+  /* Absolute, unlike the listing's path. "Absolute" is a leading slash on
+   * POSIX and a drive letter followed by a separator on Windows; asserting
+   * the slash alone made this a POSIX-only test. */
+  assert(is_absolute(out));
   um_buffer_free(out);
 
   assert(um_search_json(lib, "", NULL, 10, 0, &out) == UM_ERR_ARG);
