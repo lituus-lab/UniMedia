@@ -155,7 +155,10 @@ task appleVision, "Build the optional macOS Apple Vision face detector":
 task clibStatic, "C static library":
   mkDir "build"
   exec "nim c --app:staticlib -d:staticNoAutoInit --noMain --mm:arc -d:release --path:src " &
-    "-o:build/libUniMedia.a src/UniMedia/c_api.nim"
+    # At the repo root, not under build/: the shared workflow uploads the
+    # artifact by repo-relative path, and the consumption job links it from
+    # there on a machine with no Nim.
+    "-o:libUniMedia.a src/UniMedia/c_api.nim"
   done "clibStatic"
 
 task clib, "C shared library":
@@ -177,27 +180,14 @@ task clibMsvc, "C static library, MSVC ABI (Windows Python extension)":
     " src/UniMedia/c_api.nim"
   done "clibMsvc"
 
+# Nim's MinGW toolchain names it mingw32-make.
+let makeExe = if findExe("mingw32-make").len > 0: "mingw32-make" else: "make"
+
 task ctest, "Compile and run the C ABI test against the header":
   exec gate("clibStatic")
-  # The static library carries no transitive link information: SQLite comes from
-  # db_connector, std/sysrand reaches Security.framework on macOS, and the
-  # system HEIC decoder UniImage uses there reaches ImageIO. A `passL` inside a
-  # dependency does not travel into an archive, so every framework the archive
-  # needs is named here or the link fails at the caller.
-  # No -lsqlite3: db_connector binds SQLite with `dynlib`, so the loader
-  # resolves it at run time and there is nothing to link against. Naming it was
-  # harmless where the system ships one and fatal on Windows, where neither
-  # MinGW nor MSVC does. Measured: the archive links and the test runs without.
-  let systemLibs = when defined(macosx):
-                     " -framework Security -framework ImageIO" &
-                     " -framework CoreFoundation -framework CoreGraphics"
-                   # -lm because glibc keeps the maths functions out of libc
-                   # and UniAudio's chroma and AIFF code calls them; macOS has
-                   # them in libSystem, which is why only Linux failed to link.
-                   elif defined(windows): ""
-                   else: " -lm"
-  exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/test_abi " &
-    "tests/c/test_abi.c build/libUniMedia.a" & systemLibs
+  # The link lives in tests/c/Makefile, not here: the artifact-consumption job
+  # runs that same Makefile against the downloaded zip, and two copies of the
+  # system-library list would drift.
   # A fresh library each run: the test asserts exact item counts.
   rmDir "build/ctest-lib"
   # A sibling the test initializes itself: inside the root it would be scanned
@@ -207,8 +197,7 @@ task ctest, "Compile and run the C ABI test against the header":
   exec gate("buildOm")
   exec "bin/om catalog init build/ctest-lib --domain photo"
   putEnv "UNIMEDIA_C_TEST_DIR", getCurrentDir() & "/build/ctest-lib"
-  # MinGW appends .exe, and nimble's exec runs no shell to paper over it.
-  exec "./build/test_abi" & (when defined(windows): ".exe" else: "")
+  exec makeExe & " -C tests/c"
   done "ctest"
 
 task cexample, "C demo (print-only consumer of the um_* ABI)":
@@ -225,7 +214,7 @@ task cexample, "C demo (print-only consumer of the um_* ABI)":
                    elif defined(windows): ""
                    else: " -lm"
   exec "cc -std=c11 -Wall -Wextra -Werror -Iinclude -o build/c_demo " &
-    "examples/c/demo.c build/libUniMedia.a" & systemLibs
+    "examples/c/demo.c libUniMedia.a" & systemLibs
   exec "./build/c_demo" & (when defined(windows): ".exe" else: "")
   done "cexample"
 
