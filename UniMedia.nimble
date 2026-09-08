@@ -175,12 +175,8 @@ task clibMsvc, "C static library, MSVC ABI (Windows Python extension)":
   # UniMedia.lib -- which is the name py/setup.py already looks for under
   # build/, and which nothing here produced until now.
   mkDir "build"
-  # -d:nimOldDlls: db_connector otherwise asks the loader for sqlite3_64.dll,
-  # which exists only in Nim's MinGW distribution. Under that define it asks
-  # for sqlite3.dll -- the name CPython itself ships and loads -- so the wheel
-  # reaches SQLite through the interpreter's own copy rather than carrying one.
   exec "nim c --cc:vcc --app:staticlib --noMain --mm:arc -d:release" &
-    " -d:staticNoAutoInit -d:nimOldDlls --path:src -o:build/UniMedia.lib" &
+    " -d:staticNoAutoInit --path:src -o:build/UniMedia.lib" &
     " src/UniMedia/c_api.nim"
   done "clibMsvc"
 
