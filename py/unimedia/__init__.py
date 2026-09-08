@@ -20,12 +20,16 @@ Albums, people, places and searches hang off the same handle::
 A few things do not need a library open: whether an optional external tool is
 installed, and what a media file is.
 """
-# Before the extension: on Windows the engine asks the loader for sqlite3.dll,
-# and importing the standard library's sqlite3 first brings CPython's own copy
-# into the process, where a load by bare name then finds it. Nothing is bundled
-# and nothing is downloaded. Harmless on the platforms that resolve the system
-# library directly.
-import sqlite3 as _sqlite3  # noqa: F401
+# Before the extension: the engine asks the loader for sqlite3_64.dll, and on
+# Windows setup.py puts a copy beside this file. Since Python 3.8 a package
+# directory is not searched for DLLs unless it says so.
+import os as _os
+import sys as _sys
+
+if _sys.platform == "win32":
+    _here = _os.path.dirname(_os.path.abspath(__file__))
+    if _os.path.exists(_os.path.join(_here, "sqlite3_64.dll")):
+        _os.add_dll_directory(_here)
 
 from ._core import (
     Library, UniMediaError, abi_version, apple_double_verdict,

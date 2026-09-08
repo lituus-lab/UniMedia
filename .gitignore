@@ -52,3 +52,5 @@ book/__site/
 UniMedia.lib
 # Copied from System32 by tests/c/Makefile so a Windows consumer can run.
 tests/c/sqlite3_64.dll
+# Copied from System32 by setup.py so the Windows wheel carries its SQLite.
+py/unimedia/sqlite3_64.dll

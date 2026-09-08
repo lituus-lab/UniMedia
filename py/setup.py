@@ -94,6 +94,20 @@ else:
     if BUNDLED:
         os.makedirs(PKG_DIR, exist_ok=True)
         shutil.copy2(library_path, os.path.join(PKG_DIR, LIB_NAME))
+    if sys.platform == "win32":
+        # db_connector binds SQLite with `dynlib` and Nim loads it during module
+        # initialization, so the extension dies at import unless sqlite3_64.dll
+        # resolves. Nim's MinGW distribution ships one, which is why a checkout
+        # with Nim works and an installed wheel does not. Windows carries its
+        # own SQLite as winsqlite3.dll, exporting the same sqlite3_* API: a copy
+        # under the name the loader asks for makes the wheel self-contained.
+        system_sqlite = os.path.join(os.environ.get("WINDIR", r"C:\Windows"),
+                                     "System32", "winsqlite3.dll")
+        if not os.path.exists(system_sqlite):
+            raise SystemExit(f"setup.py: {system_sqlite} not found; the wheel "
+                             "would import and immediately die on SQLite.")
+        os.makedirs(PKG_DIR, exist_ok=True)
+        shutil.copy2(system_sqlite, os.path.join(PKG_DIR, "sqlite3_64.dll"))
 
 pyx = os.path.join("unimedia", "_core.pyx")
 source = (
@@ -116,7 +130,8 @@ ext_modules = (
 setup(
     ext_modules=ext_modules,
     include_package_data=True,
-    package_data={"unimedia": [LIB_NAME] if BUNDLED else []},
+    package_data={"unimedia": ([LIB_NAME] if BUNDLED else [])
+                          + (["sqlite3_64.dll"] if sys.platform == "win32" else [])},
     exclude_package_data={"unimedia": ["_core.c"]},
     zip_safe=False,
 )

@@ -43,11 +43,12 @@ endif
 # Windows ships SQLite as winsqlite3.dll in System32 and nothing named
 # sqlite3_64.dll, which is what db_connector asks the loader for. A copy beside
 # the binary is found first, so a consumer with no Nim installation still runs.
-# cmd's `copy`, not `cp`: mingw32-make has no shell.
+# `cp`, not cmd's `copy`: mingw32-make does have a shell on the runner, which
+# reported `copy: command not found`.
 ifeq ($(OS),Windows_NT)
 SQLITE := sqlite3_64.dll
 $(SQLITE):
-	copy "$(WINDIR)\\System32\\winsqlite3.dll" $(SQLITE)
+	cp "$(WINDIR)/System32/winsqlite3.dll" $(SQLITE)
 else
 SQLITE :=
 endif
