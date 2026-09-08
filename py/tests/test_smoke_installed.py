@@ -10,7 +10,17 @@ Importing the extension proves little by itself -- it imports fine while the
 shared library it needs stays behind. Every check below crosses into that
 library.
 """
+import faulthandler
+import sys
+
+# Breadcrumbs on stderr, unbuffered: on Windows this module died with no output
+# at all, which tells nothing beyond "before pytest printed". faulthandler
+# turns a native fault into a C-level traceback instead of a silent exit.
+faulthandler.enable()
+print("smoke: importing unimedia", file=sys.stderr, flush=True)
 import unimedia
+print("smoke: imported, engine", unimedia.engine_version(),
+      file=sys.stderr, flush=True)
 
 
 def test_the_engine_answers_its_version():
