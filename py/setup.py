@@ -2,7 +2,7 @@
 # Copyright 2026 lituus-lab
 """Build unimedia._core over the UniMedia C ABI.
 
-A repository checkout links the library built by ``nimble clib``. An extracted
+A repository checkout links the library built by ``nimble pyLib``. An extracted
 source distribution builds its vendored Nim project; Nim and Nimble must be
 available on PATH.
 """
@@ -70,16 +70,18 @@ def ensure_lib_built():
         return built
     try:
         subprocess.check_call(["nimble", "install", "-y", "-d"], cwd=project)
-        subprocess.check_call(["nimble", "clib"], cwd=project)
+        # pyLib, not clib: it picks the library this extension links against,
+        # which on Windows is the vcc-built UniMedia.lib rather than a DLL.
+        subprocess.check_call(["nimble", "pyLib"], cwd=project)
     except FileNotFoundError as error:
         raise SystemExit(
             "setup.py: `nimble` not found on PATH. Building UniMedia from "
             "source needs Nim (https://nim-lang.org/install.html)."
         ) from error
     except subprocess.CalledProcessError as error:
-        raise SystemExit(f"setup.py: `nimble clib` failed: {error}") from error
+        raise SystemExit(f"setup.py: `nimble pyLib` failed: {error}") from error
     if not os.path.exists(built):
-        raise SystemExit(f"setup.py: `nimble clib` did not produce {built}")
+        raise SystemExit(f"setup.py: `nimble pyLib` did not produce {built}")
     return built
 
 
