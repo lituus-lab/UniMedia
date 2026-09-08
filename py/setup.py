@@ -6,6 +6,7 @@ A repository checkout links the library built by ``nimble clib``. An extracted
 source distribution builds its vendored Nim project; Nim and Nimble must be
 available on PATH.
 """
+import glob
 import os
 import shutil
 import subprocess
@@ -108,6 +109,18 @@ else:
                              "would import and immediately die on SQLite.")
         os.makedirs(PKG_DIR, exist_ok=True)
         shutil.copy2(system_sqlite, os.path.join(PKG_DIR, "sqlite3_64.dll"))
+        # OpenSSL, for the same reason: -d:ssl makes the engine load libcrypto
+        # during module initialization, and Windows carries none. CPython ships
+        # its own under DLLs/, and clibMsvc built the engine against that same
+        # major, so the names match what the loader will ask for.
+        dll_dir = os.path.join(sys.base_prefix, "DLLs")
+        openssl = sorted(glob.glob(os.path.join(dll_dir, "libcrypto-*.dll"))
+                         + glob.glob(os.path.join(dll_dir, "libssl-*.dll")))
+        if not openssl:
+            raise SystemExit(f"setup.py: no libcrypto/libssl in {dll_dir}; the "
+                             "wheel would import and immediately die on SSL.")
+        for found in openssl:
+            shutil.copy2(found, os.path.join(PKG_DIR, os.path.basename(found)))
 
 pyx = os.path.join("unimedia", "_core.pyx")
 source = (
@@ -131,7 +144,7 @@ setup(
     ext_modules=ext_modules,
     include_package_data=True,
     package_data={"unimedia": ([LIB_NAME] if BUNDLED else [])
-                          + (["sqlite3_64.dll"] if sys.platform == "win32" else [])},
+                          + (["*.dll"] if sys.platform == "win32" else [])},
     exclude_package_data={"unimedia": ["_core.c"]},
     zip_safe=False,
 )
