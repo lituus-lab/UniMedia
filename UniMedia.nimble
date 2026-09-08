@@ -262,7 +262,9 @@ task pyTest, "Cython extension + pytest":
   done "pyTest"
 
 task pyWheel, "Build the Python wheel":
-  exec gate("clib")
+  # pyLib, not clib: on Windows the extension links UniMedia.lib from the vcc
+  # build, and clib produces a DLL the Python build cannot use.
+  exec gate("pyLib")
   exec gate("pyDeps")
   # setup.py rather than `pip wheel .`, as the rest of the family does: pip
   # builds in an isolated subprocess whose path a broken editable install
