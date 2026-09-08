@@ -48,3 +48,5 @@ dnimcache/
 *.log
 *.core
 book/__site/
+# The MSVC import of the C ABI; *.a above already covers libUniMedia.a.
+UniMedia.lib
