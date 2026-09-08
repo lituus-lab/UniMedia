@@ -50,3 +50,5 @@ dnimcache/
 book/__site/
 # The MSVC import of the C ABI; *.a above already covers libUniMedia.a.
 UniMedia.lib
+# Copied from System32 by tests/c/Makefile so a Windows consumer can run.
+tests/c/sqlite3_64.dll
