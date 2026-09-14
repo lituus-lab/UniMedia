@@ -90,8 +90,10 @@ A PPM is a plain-text image, which makes it a fair subject without shipping a
 binary: two pixels by two, solid red. `probe_still` reports what the bytes say,
 `blake3_file` digests them, and `perceptual_hash_file` reduces the picture to a
 hash that survives re-encoding."""),
-    ("code", """with open(inside, "w") as handle:
-    handle.write("P3\\n2 2\\n255\\n" + "255 0 0\\n" * 4)
+    ("code", """# Binary mode, deliberately: in text mode Windows would write CRLF, the
+# bytes would differ from every other platform, and so would the digest below.
+with open(inside, "wb") as handle:
+    handle.write(b"P3\\n2 2\\n255\\n" + b"255 0 0\\n" * 4)
 
 print("probe_still =", unimedia.probe_still(inside))
 print("blake3      =", unimedia.blake3_file(inside)[:16], "...",
