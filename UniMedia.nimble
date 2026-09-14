@@ -163,7 +163,7 @@ task clibStatic, "C static library":
 
 task clib, "C shared library":
   mkDir "build"
-  exec "nim c --app:lib --noMain --mm:arc -d:release --path:src " &
+  exec "nim c --app:lib -d:staticNoAutoInit --noMain --mm:arc -d:release --path:src " &
     "-o:build/libUniMedia" & (when defined(windows): ".dll"
                               elif defined(macosx): ".dylib" else: ".so") &
     " src/UniMedia/c_api.nim"
