@@ -54,3 +54,7 @@ UniMedia.lib
 tests/c/sqlite3_64.dll
 # Copied by setup.py so the Windows wheel carries its SQLite and OpenSSL.
 py/unimedia/*.dll
+# the coverage build of the C consumer, and the gcov pair make leaves beside it
+tests/c/test_capi_cov
+tests/c/*.gcda
+tests/c/*.gcno

@@ -301,6 +301,32 @@ task coverage, "LCOV + HTML coverage for the engine sources":
   # ubuntu-latest installs, calls it `unmapped` and rejects `range` as a
   # category outright, while 2.5 calls it `range` and can filter those lines
   # away. Ask which one is there rather than assume.
+  # c_api.nim answers to no Nim test: ctest reaches it through a C consumer
+  # linking the static archive, so its lines were absent from the report rather
+  # than shown as uncovered. Built -d:release like the shipped archive, because
+  # release is where the contracts are compiled away and the clamps remain.
+  mvFile "lcov.info", "build/nim.info"
+  let capiCache = "build/capicov"
+  rmDir capiCache
+  exec "nim c --app:staticlib -d:staticNoAutoInit --noMain --mm:arc -d:release --path:src --debugger:native" &
+       " --passC:--coverage --passL:--coverage --nimcache:" & capiCache &
+       " -o:build/libUniMedia_cov.a src/UniMedia/c_api.nim"
+  # Through tests/c's own Makefile: it holds the per-platform library set, and a
+  # second copy of that logic would drift. EXTRA_CFLAGS appends, so the repo
+  # keeps its own flags.
+  exec makeExe & " -C tests/c BIN=test_capi_cov" &
+       " LIB=../../build/libUniMedia_cov.a EXTRA_CFLAGS=--coverage"
+  # --no-function-coverage: the function records of the two captures disagree on
+  # where Nim's generated destructors start, and genhtml rejects the merged file
+  # for it. Not emitting them beats suppressing the complaint; the line rate,
+  # which the threshold reads, is untouched.
+  exec "lcov --capture --no-function-coverage --directory " & capiCache &
+       " --base-directory ." &
+       " --include \"*/src/UniMedia/*\" --output-file build/capi.info --quiet" &
+       " --ignore-errors mismatch,unsupported"
+  # One report, both harnesses: a line either one reaches counts once.
+  exec "lcov -a build/nim.info -a build/capi.info --output-file lcov.info" &
+       " --quiet --ignore-errors mismatch,unsupported"
   let genhtmlRange =
     if gorgeEx("genhtml --version").output.contains("LCOV version 2.0"):
       " --ignore-errors unmapped"
