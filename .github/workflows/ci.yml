@@ -28,6 +28,12 @@ jobs:
       pages: write
       id-token: write
     with:
+      # Held at 2.2.10 while the rest of the family builds with 2.2.12.
+      # malebolgia -- reached through UniCrypto -- imports std/atomics, and
+      # 2.2.12 moved atomics.nim's single-order compareExchangeWeak below its
+      # own caller, so the MSVC branch fails to compile: atomics.nim(264, 36)
+      # type mismatch under --cc:vcc. Lift this when Nim fixes it.
+      nim-version: '2.2.10'
       library: UniMedia
       module: unimedia
       python-smoke-test: py/tests/test_smoke_installed.py
