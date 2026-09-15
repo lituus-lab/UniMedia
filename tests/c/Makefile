@@ -12,7 +12,10 @@ endif
 # Overridable: the artifact-consumption job points it at the downloaded zip
 # rather than the build tree, and links the same archive from there.
 ROOT   := $(CURDIR)/../..
-CFLAGS := -I$(ROOT)/include -O2 -Wall -Wextra -Werror -std=c11
+# EXTRA_CFLAGS is a hook, not a knob: `nimble coverage` passes --coverage
+# through it. Replacing CFLAGS from the command line would drop the include
+# path, and here or in a sibling the -D the test needs.
+CFLAGS := -I$(ROOT)/include -O2 -Wall -Wextra -Werror -std=c11 $(EXTRA_CFLAGS)
 LIB    := $(ROOT)/libUniMedia.a
 
 # A static archive carries no transitive link information. SQLite is absent on
